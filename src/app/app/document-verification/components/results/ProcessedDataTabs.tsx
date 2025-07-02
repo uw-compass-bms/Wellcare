@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { FileText, Car, Calculator, FileCheck } from 'lucide-react';
-import { DocumentType, DocumentState, MvrData, AutoPlusData, QuoteData } from '../../types';
+import { DocumentType, DocumentState, MvrData, AutoPlusData, QuoteData, ApplicationData } from '../../types';
 
 interface ProcessedDataTabsProps {
   documents: Record<DocumentType, DocumentState>;
@@ -342,6 +342,207 @@ export default function ProcessedDataTabs({ documents }: ProcessedDataTabsProps)
     </div>
   );
 
+  // 渲染Application数据
+  const renderApplicationData = (data: ApplicationData) => (
+    <div className="space-y-6">
+          {/* 基本信息 */}
+    <div>
+      <h4 className="font-medium text-gray-900 mb-3">Applicant Information</h4>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+          <div><strong>Name:</strong> {data.name || 'N/A'}</div>
+          <div><strong>License Number:</strong> {data.licence_number || 'N/A'}</div>
+          <div><strong>Date of Birth:</strong> {data.date_of_birth || 'N/A'}</div>
+        </div>
+        <div className="space-y-2">
+          <div><strong>Phone:</strong> {data.phone || 'N/A'}</div>
+          <div><strong>Lessor Info:</strong> {data.lessor_info || 'N/A'}</div>
+        </div>
+        </div>
+      </div>
+
+          {/* 地址信息 */}
+    <div>
+      <h4 className="font-medium text-gray-900 mb-3">Address Information</h4>
+      <p className="text-sm text-gray-700">{data.address?.replace(/\\n/g, ', ') || 'N/A'}</p>
+    </div>
+
+    {/* 保单信息 */}
+    <div>
+      <h4 className="font-medium text-gray-900 mb-3">Policy Information</h4>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div><strong>Effective Date:</strong> {data.effective_date || 'N/A'}</div>
+        <div><strong>Expiry Date:</strong> {data.expiry_date || 'N/A'}</div>
+      </div>
+    </div>
+
+    {/* 车辆信息 */}
+    <div>
+      <h4 className="font-medium text-gray-900 mb-3">Vehicle Information</h4>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <div><strong>Year:</strong> {data.vehicle_year || 'N/A'}</div>
+          <div><strong>Make:</strong> {data.vehicle_make || 'N/A'}</div>
+          <div><strong>Model:</strong> {data.vehicle_model || 'N/A'}</div>
+        </div>
+        <div className="space-y-2">
+          <div><strong>VIN:</strong> {data.vin || 'N/A'}</div>
+          <div><strong>Ownership Type:</strong> {data.vehicle_ownership === 'lease' ? 'Lease' : data.vehicle_ownership === 'owned' ? 'Owned' : 'N/A'}</div>
+          <div><strong>Lienholder Info:</strong> {data.lienholder_info || 'N/A'}</div>
+        </div>
+      </div>
+    </div>
+
+    {/* 使用信息 */}
+    <div>
+      <h4 className="font-medium text-gray-900 mb-3">Usage Information</h4>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div><strong>Annual Driving Distance:</strong> {data.estimated_annual_driving_distance || 'N/A'}</div>
+        <div><strong>Commute Distance:</strong> {data.commute_distance || 'N/A'}</div>
+      </div>
+      {data.automobile_use_details && (
+        <div className="mt-2"><strong>Usage Details:</strong> {data.automobile_use_details}</div>
+      )}
+    </div>
+
+          {/* 驾驶员信息 */}
+    {data.drivers && data.drivers.length > 0 && (
+      <div>
+        <h4 className="font-medium text-gray-900 mb-3">Driver Information</h4>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm border border-gray-200 rounded-lg">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="text-left py-2 px-3 border-b">Name</th>
+                <th className="text-left py-2 px-3 border-b">License Number</th>
+                <th className="text-left py-2 px-3 border-b">Date of Birth</th>
+                <th className="text-left py-2 px-3 border-b">Gender</th>
+                <th className="text-left py-2 px-3 border-b">Marital Status</th>
+                <th className="text-left py-2 px-3 border-b">First Licensed Date</th>
+              </tr>
+            </thead>
+              <tbody>
+                {data.drivers.map((driver, index) => (
+                  <tr key={index} className="border-b">
+                    <td className="py-2 px-3">{driver.name}</td>
+                    <td className="py-2 px-3">{driver.licence_number}</td>
+                    <td className="py-2 px-3">{driver.date_of_birth}</td>
+                    <td className="py-2 px-3">{driver.gender || 'N/A'}</td>
+                    <td className="py-2 px-3">{driver.marital_status || 'N/A'}</td>
+                    <td className="py-2 px-3">{driver.first_licensed_date || 'N/A'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+          {/* 保险保障信息 */}
+    {data.insurance_coverages && (
+      <div>
+        <h4 className="font-medium text-gray-900 mb-3">Insurance Coverage Information</h4>
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div><strong>Liability:</strong> {data.insurance_coverages.liability_amount || 'N/A'}</div>
+            <div><strong>Property Damage:</strong> {data.insurance_coverages.property_damage_amount || 'N/A'}</div>
+          </div>
+          
+          {data.insurance_coverages.loss_or_damage && (
+            <div>
+              <h5 className="font-medium text-gray-800 mb-2">Loss or Damage Coverage</h5>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {['comprehensive', 'collision', 'all_perils'].map((coverageType) => {
+                  const coverage = data.insurance_coverages?.loss_or_damage?.[coverageType as keyof typeof data.insurance_coverages.loss_or_damage];
+                  const coverageNames = {
+                    comprehensive: 'Comprehensive',
+                    collision: 'Collision',
+                    all_perils: 'All Perils'
+                  };
+                    
+                    return (
+                      <div key={coverageType} className="border rounded-lg p-3">
+                        <h6 className="font-medium mb-2">{coverageNames[coverageType as keyof typeof coverageNames]}</h6>
+                        {coverage ? (
+                          <div className="space-y-1 text-sm">
+                            <div><strong>Covered:</strong> {coverage.covered ? 'Yes' : 'No'}</div>
+                            {coverage.covered && (
+                              <>
+                                <div><strong>Deductible:</strong> {coverage.deductible || 'N/A'}</div>
+                                <div><strong>Premium:</strong> {coverage.premium || 'N/A'}</div>
+                              </>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="text-sm text-gray-500">Not Covered</div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+          {/* 附加条款 */}
+    {data.policy_change_forms && (
+      <div>
+        <h4 className="font-medium text-gray-900 mb-3">Policy Change Forms</h4>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div><strong>#20 Loss of Use:</strong> {data.policy_change_forms.loss_of_use || 'N/A'}</div>
+          <div><strong>#27 Liab to Unowned Veh:</strong> {data.policy_change_forms.liab_to_unowned_veh || 'N/A'}</div>
+          <div><strong>#43a Limited Waiver:</strong> {data.policy_change_forms.limited_waiver || 'N/A'}</div>
+          <div><strong>#5a Rent or Lease:</strong> {data.policy_change_forms.rent_or_lease || 'N/A'}</div>
+          <div><strong>Accident Waiver:</strong> {data.policy_change_forms.accident_waiver || 'N/A'}</div>
+          <div><strong>Minor Conviction Protection:</strong> {data.policy_change_forms.minor_conviction_protection || 'N/A'}</div>
+        </div>
+      </div>
+    )}
+
+    {/* 支付信息 */}
+    {data.payment_info && (
+      <div>
+        <h4 className="font-medium text-gray-900 mb-3">Payment Information</h4>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div><strong>Annual Premium:</strong> {data.payment_info.annual_premium || 'N/A'}</div>
+          <div><strong>Monthly Payment:</strong> {data.payment_info.monthly_payment || 'N/A'}</div>
+          <div><strong>Has Interest:</strong> {data.payment_info.has_interest !== null ? (data.payment_info.has_interest ? 'Yes' : 'No') : 'N/A'}</div>
+          <div><strong>Payment Type:</strong> {data.payment_info.payment_type === 'annual' ? 'Annual' : data.payment_info.payment_type === 'monthly' ? 'Monthly' : 'N/A'}</div>
+        </div>
+      </div>
+    )}
+
+    {/* 签名信息 */}
+    {data.signatures && (
+      <div>
+        <h4 className="font-medium text-gray-900 mb-3">Signature Information</h4>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <div><strong>Applicant Signed:</strong> {data.signatures.applicant_signed ? 'Yes' : 'No'}</div>
+            <div><strong>Applicant Signature Date:</strong> {data.signatures.applicant_signature_date || 'N/A'}</div>
+          </div>
+          <div className="space-y-2">
+            <div><strong>Broker Signed:</strong> {data.signatures.broker_signed ? 'Yes' : 'No'}</div>
+            <div><strong>Broker Signature Date:</strong> {data.signatures.broker_signature_date || 'N/A'}</div>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* 备注信息 */}
+    {data.remarks && (
+      <div>
+        <h4 className="font-medium text-gray-900 mb-3">Remarks</h4>
+        <div className="bg-gray-50 p-4 rounded-lg">
+          <p className="text-sm whitespace-pre-line">{data.remarks.replace(/\\n/g, '\n')}</p>
+        </div>
+      </div>
+    )}
+    </div>
+  );
+
   // 渲染文档数据
   const renderDocumentData = (type: DocumentType) => {
     const documentState = documents[type];
@@ -355,11 +556,7 @@ export default function ProcessedDataTabs({ documents }: ProcessedDataTabsProps)
       case 'quote':
         return renderQuoteData(documentState.data as QuoteData);
       case 'application':
-        return (
-          <div className="text-center py-8">
-            <p className="text-gray-500">Data processing for application documents coming soon...</p>
-          </div>
-        );
+        return renderApplicationData(documentState.data as ApplicationData);
       default:
         return <div>Unknown document type</div>;
     }

@@ -86,14 +86,88 @@ export interface QuoteData extends BaseDocumentData {
   }> | null;
 }
 
-// Application数据类型
+// Application数据类型 - 根据Ontario汽车保险申请表提取规则定义
 export interface ApplicationData extends BaseDocumentData {
-  application_number: string | null;
-  vehicle_info: string | null;
-  coverage_requested: string | null;
-  requested_coverage_amount: string | null;
-  intended_use: string | null;
-  driving_history: string | null;
+  // 基本申请信息
+  phone: string | null;
+  lessor_info: string | null;
+  effective_date: string | null;
+  expiry_date: string | null;
+  
+  // 车辆信息
+  vehicle_year: string | null;
+  vehicle_make: string | null;
+  vehicle_model: string | null;
+  vin: string | null;
+  lienholder_info: string | null;
+  vehicle_ownership: 'lease' | 'owned' | null; // 判断是lease还是owned
+  
+  // 使用信息
+  estimated_annual_driving_distance: string | null;
+  commute_distance: string | null; // 通勤单程距离
+  automobile_use_details: string | null;
+  
+  // 驾驶员信息
+  drivers: Array<{
+    name: string;
+    licence_number: string;
+    date_of_birth: string;
+    gender: string | null;
+    marital_status: string | null;
+    first_licensed_date: string | null; // 首次获得驾照日期
+  }> | null;
+  
+  // 保险保障信息
+  insurance_coverages: {
+    liability_amount: string | null; // 第三者责任险金额 (1000=100万)
+    property_damage_amount: string | null;
+    loss_or_damage: {
+      comprehensive: {
+        covered: boolean;
+        deductible: string | null;
+        premium: string | null;
+      } | null;
+      collision: {
+        covered: boolean;
+        deductible: string | null;
+        premium: string | null;
+      } | null;
+      all_perils: {
+        covered: boolean;
+        deductible: string | null;
+        premium: string | null;
+      } | null;
+    } | null;
+  } | null;
+  
+  // 附加条款 Policy Change Forms
+  policy_change_forms: {
+    loss_of_use: string | null; // #20
+    liab_to_unowned_veh: string | null; // #27
+    limited_waiver: string | null; // #43a
+    rent_or_lease: string | null; // #5a
+    accident_waiver: string | null;
+    minor_conviction_protection: string | null;
+  } | null;
+  
+  // 备注信息
+  remarks: string | null;
+  
+  // 支付信息
+  payment_info: {
+    annual_premium: string | null; // Total Estimated Cost
+    monthly_payment: string | null; // Amount of Each Instalment
+    has_interest: boolean | null; // 是否有利息
+    payment_type: 'annual' | 'monthly' | null; // 根据利息判断支付方式
+  } | null;
+  
+  // 签名确认
+  signatures: {
+    applicant_signed: boolean | null;
+    applicant_signature_date: string | null;
+    broker_signed: boolean | null;
+    broker_signature_date: string | null;
+  } | null;
 }
 
 // 文档类型枚举

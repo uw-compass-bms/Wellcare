@@ -6,7 +6,7 @@ export class DocumentService {
     mvr: '/api/extract-mvr',
     autoplus: '/api/extract-autoplus',
     quote: '/api/extract-quote',
-    application: '/api/extract-application' // TODO: 待实现
+    application: '/api/extract-application'
   };
 
   // 处理单个文档
