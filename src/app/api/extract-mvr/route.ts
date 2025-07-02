@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { auth } from '@clerk/nextjs/server';
 
 // 定义MVR数据类型 - 与前端保持一致
 interface MvrData {
@@ -215,6 +216,15 @@ async function extractDataWithAI(b64data: string) {
 // 主API路由处理
 export async function POST(request: NextRequest) {
   try {
+    // 检查用户认证状态
+    const { userId } = await auth();
+    if (!userId) {
+      return NextResponse.json({ 
+        success: false,
+        error: 'Unauthorized access' 
+      }, { status: 401 });
+    }
+
     // 🔑 支持JSON请求格式
     const body = await request.json();
     const { b64data, fileName, fileSize, fileType } = body;

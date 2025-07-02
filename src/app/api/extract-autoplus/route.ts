@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { auth } from '@clerk/nextjs/server';
 
 // 定义Auto+数据类型
 interface AutoPlusData {
@@ -226,6 +227,15 @@ async function extractDataWithAI(b64data: string) {
 // 主API路由处理
 export async function POST(request: NextRequest) {
   try {
+    // 检查用户认证状态
+    const { userId } = await auth();
+    if (!userId) {
+      return NextResponse.json({ 
+        success: false,
+        error: 'Unauthorized access' 
+      }, { status: 401 });
+    }
+
     const body = await request.json();
     const { b64data, fileName, fileSize, fileType } = body;
     

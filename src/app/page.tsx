@@ -1,304 +1,294 @@
-"use client";
-import React, { useState } from "react";
-import { Upload, Button, Card, Typography, Alert, Spin, Descriptions, Table, Tag } from "antd";
-import { UploadOutlined, FileTextOutlined, CarOutlined } from "@ant-design/icons";
+import Link from 'next/link';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { FileText, BarChart3, Users, Settings, CheckCircle, ArrowRight, Star } from 'lucide-react';
 
-const { Title, Text } = Typography;
+export default function LandingPage() {
+  // 核心功能特性
+  const features = [
+    {
+      title: 'Smart Document Recognition',
+      description: 'AI-powered extraction from MVR and Auto+ documents with 99% accuracy',
+      icon: FileText,
+      color: 'text-blue-600',
+      bgColor: 'bg-blue-50',
+    },
+    {
+      title: 'Real-time Analytics',
+      description: 'Comprehensive dashboards and insights for better decision making',
+      icon: BarChart3,
+      color: 'text-green-600',
+      bgColor: 'bg-green-50',
+    },
+    {
+      title: 'Customer Management',
+      description: 'Complete CRM solution for managing clients and their documents',
+      icon: Users,
+      color: 'text-purple-600',
+      bgColor: 'bg-purple-50',
+    },
+    {
+      title: 'Advanced Tools',
+      description: 'Workflow automation and integration capabilities',
+      icon: Settings,
+      color: 'text-orange-600',
+      bgColor: 'bg-orange-50',
+    },
+  ];
 
-// MVR数据类型
-interface MvrData {
-  licence_number: string | null;
-  name: string | null;
-  gender: string | null;
-  date_of_birth: string | null;
-  address: string | null;
-  issue_date: string | null;
-  expiry_date: string | null;
-  class: string | null;
-  status: string | null;
-  conditions: Array<{ date: string | null; description: string }> | null;
-  convictions: Array<{ date: string | null; description: string }> | null;
-}
+  // 产品优势
+  const benefits = [
+    'Reduce manual processing time by 90%',
+    'Eliminate data entry errors',
+    'Automated compliance checking',
+    'Secure cloud-based storage',
+    'Real-time collaboration features',
+    '24/7 customer support'
+  ];
 
-// Auto+数据类型
-interface AutoPlusData {
-  name: string | null;
-  licence_number: string | null;
-  date_of_birth: string | null;
-  address: string | null;
-  first_insurance_date: string | null;
-  policies: Array<{ policy_period: string; company: string; status: string }> | null;
-  claims: Array<{
-    claim_number: string;
-    date_of_loss: string;
-    at_fault: boolean;
-    total_claim_amount: string;
-    coverage_types: string | null;
-  }> | null;
-}
-
-type DocumentType = 'mvr' | 'autoplus';
-type ExtractedData = MvrData | AutoPlusData;
-
-export default function Home() {
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [data, setData] = useState<ExtractedData | null>(null);
-  const [docType, setDocType] = useState<DocumentType | null>(null);
-
-  const handleUpload = async (file: File, type: DocumentType) => {
-    setLoading(true);
-    setError(null);
-    setData(null);
-    setDocType(type);
-
-    try {
-      // 转换文件为base64
-      const b64 = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.readAsDataURL(file);
-        reader.onload = () => {
-          const result = reader.result as string;
-          const b64 = result.split(',')[1];
-          if (b64) resolve(b64);
-          else reject(new Error("Failed to extract base64 data"));
-        };
-        reader.onerror = reject;
-      });
-
-      // 调用对应的API
-      const endpoint = type === 'mvr' ? '/api/extract-mvr' : '/api/extract-autoplus';
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          b64data: b64,
-          fileName: file.name,
-          fileSize: file.size,
-          fileType: file.type,
-        }),
-      });
-
-      const result = await response.json();
-      if (result.success && result.data) {
-        setData(result.data);
-      } else {
-        setError(result.error || "处理失败");
-      }
-    } catch (err) {
-      setError("网络错误，请重试");
-    } finally {
-      setLoading(false);
+  // 客户评价
+  const testimonials = [
+    {
+      name: 'Sarah Johnson',
+      role: 'Operations Manager',
+      company: 'InsureTech Solutions',
+      content: 'UW Compass transformed our document processing workflow. What used to take hours now takes minutes.',
+      rating: 5
+    },
+    {
+      name: 'Mike Chen',
+      role: 'Senior Underwriter', 
+      company: 'Premium Insurance Co.',
+      content: 'The accuracy and speed of document extraction is incredible. It has significantly improved our efficiency.',
+      rating: 5
     }
-  };
-
-  // 渲染客户基本信息
-  const renderBasicInfo = () => {
-    if (!data) return null;
-
-    const items = [
-      { key: 'name', label: '姓名', children: data.name || 'N/A' },
-      { key: 'licence', label: '驾照号码', children: data.licence_number || 'N/A' },
-      { key: 'birth', label: '出生日期', children: data.date_of_birth || 'N/A' },
-      { key: 'address', label: '地址', children: data.address ? data.address.replace(/\\n/g, ', ') : 'N/A' },
-    ];
-
-    // MVR特有字段
-    if (docType === 'mvr') {
-      const mvrData = data as MvrData;
-      items.push(
-        { key: 'class', label: '驾照类别', children: mvrData.class || 'N/A' },
-        { key: 'status', label: '状态', children: mvrData.status || 'N/A' },
-        { key: 'expiry', label: '到期日期', children: mvrData.expiry_date || 'N/A' }
-      );
-    }
-
-    // Auto+特有字段
-    if (docType === 'autoplus') {
-      const autoPlusData = data as AutoPlusData;
-      items.push(
-        { key: 'first_insurance', label: '首次投保日期', children: autoPlusData.first_insurance_date || 'N/A' }
-      );
-    }
-
-    return (
-      <Card title="客户基本信息" style={{ marginBottom: 16 }}>
-        <Descriptions bordered column={1} size="small" items={items} />
-      </Card>
-    );
-  };
-
-  // 渲染保单历史 (Auto+)
-  const renderPolicies = () => {
-    if (docType !== 'autoplus') return null;
-    const autoPlusData = data as AutoPlusData;
-    if (!autoPlusData.policies || autoPlusData.policies.length === 0) return null;
-
-    const columns = [
-      { title: '保单期间', dataIndex: 'policy_period', key: 'policy_period' },
-      { title: '保险公司', dataIndex: 'company', key: 'company' },
-      { 
-        title: '状态', 
-        dataIndex: 'status', 
-        key: 'status',
-        render: (status: string) => (
-          <Tag color={status.includes('Cancelled') ? 'red' : 'green'}>{status}</Tag>
-        )
-      },
-    ];
-
-    return (
-      <Card title="保单历史" style={{ marginBottom: 16 }}>
-        <Table 
-          dataSource={autoPlusData.policies.map((policy, index) => ({ ...policy, key: index }))} 
-          columns={columns} 
-          pagination={false}
-          size="small"
-        />
-      </Card>
-    );
-  };
-
-  // 渲染理赔记录
-  const renderClaims = () => {
-    if (docType !== 'autoplus') return null;
-    const autoPlusData = data as AutoPlusData;
-    if (!autoPlusData.claims || autoPlusData.claims.length === 0) return null;
-
-    const columns = [
-      { title: '理赔号', dataIndex: 'claim_number', key: 'claim_number' },
-      { title: '出险日期', dataIndex: 'date_of_loss', key: 'date_of_loss' },
-      { 
-        title: '责任', 
-        dataIndex: 'at_fault', 
-        key: 'at_fault',
-        render: (atFault: boolean) => (
-          <Tag color={atFault ? 'red' : 'green'}>{atFault ? '有责' : '无责'}</Tag>
-        )
-      },
-      { title: '理赔金额', dataIndex: 'total_claim_amount', key: 'total_claim_amount' },
-      { title: '保险类型', dataIndex: 'coverage_types', key: 'coverage_types' },
-    ];
-
-    return (
-      <Card title="理赔记录">
-        <Table 
-          dataSource={autoPlusData.claims.map((claim, index) => ({ ...claim, key: index }))} 
-          columns={columns} 
-          pagination={false}
-          size="small"
-        />
-      </Card>
-    );
-  };
-
-  // 渲染违法记录 (MVR)
-  const renderViolations = () => {
-    if (docType !== 'mvr') return null;
-    const mvrData = data as MvrData;
-    
-    const hasConditions = mvrData.conditions && mvrData.conditions.length > 0;
-    const hasConvictions = mvrData.convictions && mvrData.convictions.length > 0;
-    
-    if (!hasConditions && !hasConvictions) return null;
-
-    return (
-      <Card title="驾驶记录">
-        {hasConditions && (
-          <div style={{ marginBottom: 16 }}>
-            <Text strong>驾驶条件:</Text>
-            {mvrData.conditions!.map((condition, index) => (
-              <div key={index} style={{ marginLeft: 16, marginTop: 4 }}>
-                {condition.date && <Text type="secondary">{condition.date} - </Text>}
-                <Text>{condition.description}</Text>
-              </div>
-            ))}
-          </div>
-        )}
-        {hasConvictions && (
-          <div>
-            <Text strong>违法记录:</Text>
-            {mvrData.convictions!.map((conviction, index) => (
-              <div key={index} style={{ marginLeft: 16, marginTop: 4 }}>
-                {conviction.date && <Text type="secondary">{conviction.date} - </Text>}
-                <Text>{conviction.description}</Text>
-              </div>
-            ))}
-          </div>
-        )}
-      </Card>
-    );
-  };
+  ];
 
   return (
-    <div style={{ maxWidth: 800, margin: "40px auto", padding: 24 }}>
-      <Title level={2} style={{ textAlign: "center", marginBottom: 32 }}>
-        客户文档提取系统
-      </Title>
-
-      <div style={{ display: 'flex', gap: 16, marginBottom: 32 }}>
-        <Card style={{ flex: 1 }}>
-          <div style={{ textAlign: 'center' }}>
-            <FileTextOutlined style={{ fontSize: 24, color: '#1890ff', marginBottom: 8 }} />
-            <div style={{ marginBottom: 16 }}>
-              <Text strong>MVR 文档</Text>
-              <br />
-              <Text type="secondary" style={{ fontSize: 12 }}>机动车记录</Text>
+    <div className="min-h-screen bg-white">
+      {/* 导航栏 */}
+      <header className="fixed w-full bg-white/95 backdrop-blur-sm border-b z-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-16">
+            <div className="flex items-center">
+              <h1 className="text-2xl font-bold text-blue-600">UW Compass</h1>
             </div>
-            <Upload
-              beforeUpload={file => { handleUpload(file, 'mvr'); return false; }}
-              showUploadList={false}
-              accept=".pdf,.png,.jpg,.jpeg,.webp"
-            >
-              <Button icon={<UploadOutlined />} block>
-                上传 MVR 文档
+            <nav className="hidden md:flex space-x-8">
+              <a href="#features" className="text-gray-600 hover:text-gray-900">Features</a>
+              <a href="#benefits" className="text-gray-600 hover:text-gray-900">Benefits</a>
+              <a href="#testimonials" className="text-gray-600 hover:text-gray-900">Testimonials</a>
+              <a href="#pricing" className="text-gray-600 hover:text-gray-900">Pricing</a>
+            </nav>
+            <div className="flex space-x-4">
+              <Button variant="ghost" asChild>
+                <Link href="/sign-in">Sign In</Link>
               </Button>
-            </Upload>
-          </div>
-        </Card>
-
-        <Card style={{ flex: 1 }}>
-          <div style={{ textAlign: 'center' }}>
-            <CarOutlined style={{ fontSize: 24, color: '#52c41a', marginBottom: 8 }} />
-            <div style={{ marginBottom: 16 }}>
-              <Text strong>Auto+ 文档</Text>
-              <br />
-              <Text type="secondary" style={{ fontSize: 12 }}>保险记录报告</Text>
+              <Button asChild>
+                <Link href="/sign-up">Get Started</Link>
+              </Button>
             </div>
-            <Upload
-              beforeUpload={file => { handleUpload(file, 'autoplus'); return false; }}
-              showUploadList={false}
-              accept=".pdf,.png,.jpg,.jpeg,.webp"
-            >
-              <Button icon={<UploadOutlined />} block>
-                上传 Auto+ 文档
-              </Button>
-            </Upload>
-          </div>
-        </Card>
-      </div>
-
-      {loading && (
-        <div style={{ textAlign: "center", padding: 32 }}>
-          <Spin size="large" />
-          <div style={{ marginTop: 16 }}>
-            <Text>正在处理文档...</Text>
           </div>
         </div>
-      )}
+      </header>
 
-      {error && (
-        <Alert type="error" message={error} showIcon style={{ marginBottom: 16 }} />
-      )}
-
-      {data && (
-        <div>
-          {renderBasicInfo()}
-          {renderPolicies()}
-          {renderClaims()}
-          {renderViolations()}
+      {/* 英雄区域 */}
+      <section className="pt-24 pb-12 lg:pt-32 lg:pb-20">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center">
+            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-gray-900 mb-6">
+              Intelligent Document Processing
+              <span className="block text-blue-600">for Insurance Industry</span>
+            </h1>
+            <p className="text-xl text-gray-600 mb-8 max-w-3xl mx-auto">
+              Transform your MVR and Auto+ document processing with AI-powered extraction, 
+              automated verification, and comprehensive customer management.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <Button size="lg" asChild>
+                <Link href="/sign-up" className="inline-flex items-center">
+                  Start Free Trial
+                  <ArrowRight className="ml-2 w-4 h-4" />
+                </Link>
+              </Button>
+              <Button variant="outline" size="lg">
+                Watch Demo
+              </Button>
+            </div>
+            <p className="text-sm text-gray-500 mt-4">
+              No credit card required • 14-day free trial • Setup in minutes
+            </p>
+          </div>
         </div>
-      )}
+      </section>
+
+      {/* 功能特性 */}
+      <section id="features" className="py-20 bg-gray-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl font-bold text-gray-900 mb-4">
+              Everything You Need to Process Documents
+            </h2>
+            <p className="text-xl text-gray-600">
+              Comprehensive suite of tools designed for insurance professionals
+            </p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+            {features.map((feature) => {
+              const IconComponent = feature.icon;
+              return (
+                <Card key={feature.title} className="text-center hover:shadow-lg transition-shadow">
+                  <CardHeader>
+                    <div className={`w-16 h-16 ${feature.bgColor} rounded-lg flex items-center justify-center mx-auto mb-4`}>
+                      <IconComponent className={`w-8 h-8 ${feature.color}`} />
+                    </div>
+                    <CardTitle className="text-lg">{feature.title}</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-gray-600">{feature.description}</p>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      {/* 产品优势 */}
+      <section id="benefits" className="py-20">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+            <div>
+              <h2 className="text-3xl font-bold text-gray-900 mb-6">
+                Why Choose UW Compass?
+              </h2>
+              <p className="text-lg text-gray-600 mb-8">
+                Our platform combines cutting-edge AI technology with industry-specific 
+                expertise to deliver unmatched document processing capabilities.
+              </p>
+              <div className="space-y-4">
+                {benefits.map((benefit, index) => (
+                  <div key={index} className="flex items-center">
+                    <CheckCircle className="w-5 h-5 text-green-500 mr-3 flex-shrink-0" />
+                    <span className="text-gray-700">{benefit}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="bg-gradient-to-br from-blue-50 to-purple-50 p-8 rounded-2xl">
+              <div className="text-center">
+                <div className="text-4xl font-bold text-blue-600 mb-2">99.8%</div>
+                <div className="text-gray-600 mb-6">Document Processing Accuracy</div>
+                <div className="grid grid-cols-2 gap-4 text-center">
+                  <div>
+                    <div className="text-2xl font-bold text-gray-900">90%</div>
+                    <div className="text-sm text-gray-600">Time Saved</div>
+                  </div>
+                  <div>
+                    <div className="text-2xl font-bold text-gray-900">50+</div>
+                    <div className="text-sm text-gray-600">Happy Clients</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 客户评价 */}
+      <section id="testimonials" className="py-20 bg-gray-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl font-bold text-gray-900 mb-4">
+              What Our Customers Say
+            </h2>
+            <p className="text-xl text-gray-600">
+              Don't just take our word for it
+            </p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            {testimonials.map((testimonial, index) => (
+              <Card key={index} className="p-6">
+                <CardContent className="pt-0">
+                  <div className="flex mb-4">
+                    {[...Array(testimonial.rating)].map((_, i) => (
+                      <Star key={i} className="w-5 h-5 text-yellow-400 fill-current" />
+                    ))}
+                  </div>
+                  <p className="text-gray-700 mb-4 italic">"{testimonial.content}"</p>
+                  <div>
+                    <div className="font-semibold text-gray-900">{testimonial.name}</div>
+                    <div className="text-sm text-gray-600">{testimonial.role}, {testimonial.company}</div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* CTA区域 */}
+      <section className="py-20 bg-blue-600">
+        <div className="max-w-4xl mx-auto text-center px-4 sm:px-6 lg:px-8">
+          <h2 className="text-3xl font-bold text-white mb-4">
+            Ready to Transform Your Document Processing?
+          </h2>
+          <p className="text-xl text-blue-100 mb-8">
+            Join hundreds of insurance professionals who trust UW Compass for their document processing needs.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <Button size="lg" variant="secondary" asChild>
+              <Link href="/sign-up" className="inline-flex items-center">
+                Start Free Trial
+                <ArrowRight className="ml-2 w-4 h-4" />
+              </Link>
+            </Button>
+            <Button size="lg" variant="outline" className="text-white border-white hover:bg-white hover:text-blue-600">
+              Contact Sales
+            </Button>
+          </div>
+        </div>
+      </section>
+
+      {/* 页脚 */}
+      <footer className="bg-gray-900 text-white py-12">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+            <div>
+              <h3 className="text-lg font-semibold mb-4">UW Compass</h3>
+              <p className="text-gray-400">
+                Intelligent document processing for the insurance industry.
+              </p>
+            </div>
+            <div>
+              <h4 className="font-semibold mb-4">Product</h4>
+              <ul className="space-y-2 text-gray-400">
+                <li><a href="#" className="hover:text-white">Features</a></li>
+                <li><a href="#" className="hover:text-white">Pricing</a></li>
+                <li><a href="#" className="hover:text-white">API</a></li>
+              </ul>
+            </div>
+            <div>
+              <h4 className="font-semibold mb-4">Company</h4>
+              <ul className="space-y-2 text-gray-400">
+                <li><a href="#" className="hover:text-white">About</a></li>
+                <li><a href="#" className="hover:text-white">Careers</a></li>
+                <li><a href="#" className="hover:text-white">Contact</a></li>
+              </ul>
+            </div>
+            <div>
+              <h4 className="font-semibold mb-4">Support</h4>
+              <ul className="space-y-2 text-gray-400">
+                <li><a href="#" className="hover:text-white">Documentation</a></li>
+                <li><a href="#" className="hover:text-white">Help Center</a></li>
+                <li><a href="#" className="hover:text-white">Status</a></li>
+              </ul>
+            </div>
+          </div>
+          <div className="border-t border-gray-800 mt-8 pt-8 text-center text-gray-400">
+            <p>&copy; 2024 UW Compass. All rights reserved.</p>
+          </div>
+        </div>
+      </footer>
     </div>
   );
-}
+} 
