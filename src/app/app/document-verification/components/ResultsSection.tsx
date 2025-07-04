@@ -8,17 +8,17 @@ interface ResultsSectionProps {
 }
 
 export default function ResultsSection({ documents }: ResultsSectionProps) {
-  // 检查是否有任何已上传的文档
+  // Check if any documents have been uploaded
   const hasUploadedDocuments = Object.values(documents).some(doc => doc.uploaded);
   
   if (!hasUploadedDocuments) return null;
 
   return (
     <div className="space-y-8">
-      {/* 处理后数据标签页 */}
+      {/* Processed data tabs */}
       <ProcessedDataTabs documents={documents} />
       
-      {/* 业务规则验证 */}
+      {/* Business rules validation */}
       <BusinessRulesValidation documents={documents} />
     </div>
   );

@@ -11,7 +11,10 @@ export default function DocumentVerification() {
     isProcessing,
     processingStep,
     handleFileUpload,
-    handleProcessAllDocuments
+    handleProcessAllDocuments,
+    processDocument,
+    reprocessDocument,
+    clearDocument
   } = useDocumentProcessing();
 
   return (
@@ -34,6 +37,9 @@ export default function DocumentVerification() {
         isProcessing={isProcessing}
         processingStep={processingStep}
         onProcessAllDocuments={handleProcessAllDocuments}
+        onProcessDocument={processDocument}
+        onReprocessDocument={reprocessDocument}
+        onClearDocument={clearDocument}
       />
 
       {/* 结果展示区域 */}
