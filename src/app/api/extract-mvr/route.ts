@@ -71,7 +71,7 @@ function encodeBase64ToData(base64data: string): {
   }
 }
 
-// MVR提取提示词 - 更新为新的数据结构
+// MVR提取提示词 - 专注于status和convictions的准确提取
 function getMvrPrompt(): string {
   return `You are an expert OCR and data extraction agent. Analyze the provided document (PDF or image) of an MVR (Motor Vehicle Record) from Ontario, Canada. Extract the following fields and return the data in a structured JSON format.
 
@@ -88,14 +88,20 @@ function getMvrPrompt(): string {
 - **expiry_date**: The expiry date of the licence, in YYYY-MM-DD format.
 - **date_of_birth**: The date of birth of the driver, in YYYY-MM-DD format.
 - **class**: The class of the licence (e.g., G, G2).
-- **status**: The current status of the licence.
+- **status**: The current status of the licence. This is CRITICAL - extract exactly as shown: "LICENCED", "EXPIRED", "SUSPENDED", "UNLICENSED", etc. This field determines license validity.
 - **issue_date**: The original issue date of the licence, in YYYY-MM-DD format.
 - **conditions**: An array of objects for items under "CONDITIONS AND ENDORSEMENTS". Each object should have:
   - date: The date if available (YYYY-MM-DD format) or null
   - description: The condition description
+  **IGNORE the following text patterns:** "REQUIRES CORRECTIVE LENSES", "SEARCH SUCCESSFUL - NO PUBLIC RECORD" - these are not actual conditions.
 - **convictions**: An array of objects for items under "CONVICTIONS, DISCHARGES AND OTHER ACTIONS". Each object should have:
-  - date: The conviction date (YYYY-MM-DD format) or null
-  - description: The conviction description
+  - date: The conviction date (YYYY-MM-DD format) - USE THE DATE FROM THE "DATE" COLUMN OR THE DATE LISTED BELOW THE CONVICTION, NOT the date mentioned in the description text
+  - description: The conviction description (e.g., "SPEEDING", "DISOBEY LEGAL SIGN", etc.)
+
+**CRITICAL for Convictions:**
+- For conviction dates, use the date from the structured "DATE" column or the date listed below the conviction entry
+- Do NOT use dates that appear within the description text
+- Focus on the actual violation description (e.g., "SPEEDING", "DISOBEY LEGAL SIGN")
 
 **Example of desired JSON output:**
 {

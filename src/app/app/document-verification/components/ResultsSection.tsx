@@ -2,7 +2,7 @@
 import React from 'react';
 import { DocumentType, DocumentState } from '../types';
 import ProcessedDataTabs from './results/ProcessedDataTabs';
-import ComparisonMatrix from './results/ComparisonMatrix';
+import BusinessRulesValidation from './results/business-rules/BusinessRulesValidation';
 
 interface ResultsSectionProps {
   documents: Record<DocumentType, DocumentState>;
@@ -19,8 +19,8 @@ export default function ResultsSection({ documents }: ResultsSectionProps) {
       {/* 处理后数据标签页 */}
       <ProcessedDataTabs documents={documents} />
       
-      {/* 比对矩阵 */}
-      <ComparisonMatrix documents={documents} />
+      {/* 业务规则验证 */}
+      <BusinessRulesValidation documents={documents} />
     </div>
   );
 } 
