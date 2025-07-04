@@ -120,17 +120,14 @@ export interface ApplicationData extends BaseDocumentData {
   // 保险保障信息
   insurance_coverages: {
     liability_amount: string | null; // 第三者责任险金额 (1000=100万)
-    property_damage_amount: string | null;
     loss_or_damage: {
       comprehensive: {
         covered: boolean;
         deductible: string | null;
-        premium: string | null;
       } | null;
       collision: {
         covered: boolean;
         deductible: string | null;
-        premium: string | null;
       } | null;
       all_perils: {
         covered: boolean;
@@ -142,12 +139,12 @@ export interface ApplicationData extends BaseDocumentData {
   
   // 附加条款 Policy Change Forms
   policy_change_forms: {
-    loss_of_use: string | null; // #20
-    liab_to_unowned_veh: string | null; // #27
-    limited_waiver: string | null; // #43a
-    rent_or_lease: string | null; // #5a
-    accident_waiver: string | null;
-    minor_conviction_protection: string | null;
+    loss_of_use: boolean | null; // #20
+    liab_to_unowned_veh: boolean | null; // #27
+    limited_waiver: boolean | null; // #43a
+    rent_or_lease: boolean | null; // #5a
+    accident_waiver: boolean | null;
+    minor_conviction_protection: boolean | null;
   } | null;
   
   // 备注信息
@@ -157,8 +154,7 @@ export interface ApplicationData extends BaseDocumentData {
   payment_info: {
     annual_premium: string | null; // Total Estimated Cost
     monthly_payment: string | null; // Amount of Each Instalment
-    has_interest: boolean | null; // 是否有利息
-    payment_type: 'annual' | 'monthly' | null; // 根据利息判断支付方式
+    payment_type: 'annual' | 'monthly' | null; // 支付方式
   } | null;
   
   // 签名确认

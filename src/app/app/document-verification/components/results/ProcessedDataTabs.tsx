@@ -443,45 +443,69 @@ export default function ProcessedDataTabs({ documents }: ProcessedDataTabsProps)
       <div>
         <h4 className="font-medium text-gray-900 mb-3">Insurance Coverage Information</h4>
         <div className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
             <div><strong>Liability:</strong> {data.insurance_coverages.liability_amount || 'N/A'}</div>
-            <div><strong>Property Damage:</strong> {data.insurance_coverages.property_damage_amount || 'N/A'}</div>
           </div>
           
           {data.insurance_coverages.loss_or_damage && (
             <div>
               <h5 className="font-medium text-gray-800 mb-2">Loss or Damage Coverage</h5>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {['comprehensive', 'collision', 'all_perils'].map((coverageType) => {
-                  const coverage = data.insurance_coverages?.loss_or_damage?.[coverageType as keyof typeof data.insurance_coverages.loss_or_damage];
-                  const coverageNames = {
-                    comprehensive: 'Comprehensive',
-                    collision: 'Collision',
-                    all_perils: 'All Perils'
-                  };
-                    
-                    return (
-                      <div key={coverageType} className="border rounded-lg p-3">
-                        <h6 className="font-medium mb-2">{coverageNames[coverageType as keyof typeof coverageNames]}</h6>
-                        {coverage ? (
-                          <div className="space-y-1 text-sm">
-                            <div><strong>Covered:</strong> {coverage.covered ? 'Yes' : 'No'}</div>
-                            {coverage.covered && (
-                              <>
-                                <div><strong>Deductible:</strong> {coverage.deductible || 'N/A'}</div>
-                                <div><strong>Premium:</strong> {coverage.premium || 'N/A'}</div>
-                              </>
-                            )}
-                          </div>
-                        ) : (
-                          <div className="text-sm text-gray-500">Not Covered</div>
+              {(() => {
+                const { comprehensive, collision, all_perils } = data.insurance_coverages.loss_or_damage;
+                
+                // 检查All Perils是否有效（covered=true）
+                const hasAllPerils = all_perils?.covered;
+                
+                // 检查Comprehensive和Collision是否都有效
+                const hasComprehensive = comprehensive?.covered;
+                const hasCollision = collision?.covered;
+                const hasSeparateCoverage = hasComprehensive && hasCollision;
+                
+                if (hasAllPerils) {
+                  // 显示All Perils（全险）
+                  return (
+                    <div className="border rounded-lg p-4 bg-blue-50">
+                      <h6 className="font-medium text-blue-900 mb-3">All Perils (Full Coverage)</h6>
+                      <div className="text-sm text-blue-800">
+                        <div className="mb-2"><strong>Coverage Type:</strong> Comprehensive + Collision Combined</div>
+                        <div className="mb-2"><strong>Deductible:</strong> {all_perils.deductible || 'N/A'}</div>
+                        {'premium' in all_perils && (
+                          <div><strong>Premium:</strong> {all_perils.premium || 'N/A'}</div>
                         )}
                       </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
+                    </div>
+                  );
+                } else if (hasSeparateCoverage) {
+                  // 显示分开的Comprehensive + Collision
+                  return (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="border rounded-lg p-3 bg-green-50">
+                        <h6 className="font-medium text-green-900 mb-2">Comprehensive</h6>
+                        <div className="space-y-1 text-sm text-green-800">
+                          <div><strong>Covered:</strong> Yes</div>
+                          <div><strong>Deductible:</strong> {comprehensive.deductible || 'N/A'}</div>
+                        </div>
+                      </div>
+                      <div className="border rounded-lg p-3 bg-green-50">
+                        <h6 className="font-medium text-green-900 mb-2">Collision</h6>
+                        <div className="space-y-1 text-sm text-green-800">
+                          <div><strong>Covered:</strong> Yes</div>
+                          <div><strong>Deductible:</strong> {collision.deductible || 'N/A'}</div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                } else {
+                  // 没有有效的损失或损害保险
+                  return (
+                    <div className="border rounded-lg p-4 bg-gray-50">
+                      <div className="text-sm text-gray-600">No Loss or Damage Coverage</div>
+                    </div>
+                  );
+                }
+              })()}
+            </div>
+          )}
           </div>
         </div>
       )}
@@ -491,12 +515,12 @@ export default function ProcessedDataTabs({ documents }: ProcessedDataTabsProps)
       <div>
         <h4 className="font-medium text-gray-900 mb-3">Policy Change Forms</h4>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div><strong>#20 Loss of Use:</strong> {data.policy_change_forms.loss_of_use || 'N/A'}</div>
-          <div><strong>#27 Liab to Unowned Veh:</strong> {data.policy_change_forms.liab_to_unowned_veh || 'N/A'}</div>
-          <div><strong>#43a Limited Waiver:</strong> {data.policy_change_forms.limited_waiver || 'N/A'}</div>
-          <div><strong>#5a Rent or Lease:</strong> {data.policy_change_forms.rent_or_lease || 'N/A'}</div>
-          <div><strong>Accident Waiver:</strong> {data.policy_change_forms.accident_waiver || 'N/A'}</div>
-          <div><strong>Minor Conviction Protection:</strong> {data.policy_change_forms.minor_conviction_protection || 'N/A'}</div>
+          <div><strong>#20 Loss of Use:</strong> {data.policy_change_forms.loss_of_use !== null ? (data.policy_change_forms.loss_of_use ? 'Yes' : 'No') : 'N/A'}</div>
+          <div><strong>#27 Liab to Unowned Veh:</strong> {data.policy_change_forms.liab_to_unowned_veh !== null ? (data.policy_change_forms.liab_to_unowned_veh ? 'Yes' : 'No') : 'N/A'}</div>
+          <div><strong>#43a Limited Waiver:</strong> {data.policy_change_forms.limited_waiver !== null ? (data.policy_change_forms.limited_waiver ? 'Yes' : 'No') : 'N/A'}</div>
+          <div><strong>#5a Rent or Lease:</strong> {data.policy_change_forms.rent_or_lease !== null ? (data.policy_change_forms.rent_or_lease ? 'Yes' : 'No') : 'N/A'}</div>
+          <div><strong>Accident Waiver:</strong> {data.policy_change_forms.accident_waiver !== null ? (data.policy_change_forms.accident_waiver ? 'Yes' : 'No') : 'N/A'}</div>
+          <div><strong>Minor Conviction Protection:</strong> {data.policy_change_forms.minor_conviction_protection !== null ? (data.policy_change_forms.minor_conviction_protection ? 'Yes' : 'No') : 'N/A'}</div>
         </div>
       </div>
     )}
@@ -505,10 +529,9 @@ export default function ProcessedDataTabs({ documents }: ProcessedDataTabsProps)
     {data.payment_info && (
       <div>
         <h4 className="font-medium text-gray-900 mb-3">Payment Information</h4>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div><strong>Annual Premium:</strong> {data.payment_info.annual_premium || 'N/A'}</div>
           <div><strong>Monthly Payment:</strong> {data.payment_info.monthly_payment || 'N/A'}</div>
-          <div><strong>Has Interest:</strong> {data.payment_info.has_interest !== null ? (data.payment_info.has_interest ? 'Yes' : 'No') : 'N/A'}</div>
           <div><strong>Payment Type:</strong> {data.payment_info.payment_type === 'annual' ? 'Annual' : data.payment_info.payment_type === 'monthly' ? 'Monthly' : 'N/A'}</div>
         </div>
       </div>

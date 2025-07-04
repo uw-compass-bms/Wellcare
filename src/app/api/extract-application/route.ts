@@ -39,17 +39,14 @@ interface ApplicationData {
   // 保险保障信息
   insurance_coverages: {
     liability_amount: string | null;
-    property_damage_amount: string | null;
     loss_or_damage: {
       comprehensive: {
         covered: boolean;
         deductible: string | null;
-        premium: string | null;
       } | null;
       collision: {
         covered: boolean;
         deductible: string | null;
-        premium: string | null;
       } | null;
       all_perils: {
         covered: boolean;
@@ -61,12 +58,12 @@ interface ApplicationData {
   
   // 附加条款
   policy_change_forms: {
-    loss_of_use: string | null;
-    liab_to_unowned_veh: string | null;
-    limited_waiver: string | null;
-    rent_or_lease: string | null;
-    accident_waiver: string | null;
-    minor_conviction_protection: string | null;
+    loss_of_use: boolean | null;
+    liab_to_unowned_veh: boolean | null;
+    limited_waiver: boolean | null;
+    rent_or_lease: boolean | null;
+    accident_waiver: boolean | null;
+    minor_conviction_protection: boolean | null;
   } | null;
   
   // 备注信息
@@ -76,7 +73,6 @@ interface ApplicationData {
   payment_info: {
     annual_premium: string | null;
     monthly_payment: string | null;
-    has_interest: boolean | null;
     payment_type: 'annual' | 'monthly' | null;
   } | null;
   
@@ -186,23 +182,26 @@ function getApplicationPrompt(): string {
 ### 6. 保险保障信息
 - **insurance_coverages**:
   - **liability_amount**: 第三者责任险金额（注意：1000表示100万）
-  - **property_damage_amount**: 财产损失金额
   - **loss_or_damage**: 损失或损害保障
-    - **comprehensive**: 如果有Deductible和Premium且Premium>0，设置covered=true，否则covered=false
+    - **comprehensive**: 如果有Deductible，设置covered=true，否则covered=false
+      - **covered**: 是否承保
+      - **deductible**: 免赔额，必须是百位整数(500, 1000, 2000, 5000等)，如果不是请四舍五入到最近的百位数
+    - **collision**: 如果有Deductible，设置covered=true，否则covered=false
+      - **covered**: 是否承保
+      - **deductible**: 免赔额，必须是百位整数(500, 1000, 2000, 5000等)，如果不是请四舍五入到最近的百位数
+    - **all_perils**: 如果有Deductible和Premium且Premium>0，设置covered=true，否则covered=false
       - **covered**: 是否承保
       - **deductible**: 免赔额
       - **premium**: 保费
-    - **collision**: 同上规则
-    - **all_perils**: 同上规则
 
 ### 7. 附加条款 (Policy Change Forms部分)
 - **policy_change_forms**:
-  - **loss_of_use**: #20 Loss of Use的金额
-  - **liab_to_unowned_veh**: #27 Liab to Unowned Veh.的金额
-  - **limited_waiver**: #43a Limited Waiver (Months)的金额
-  - **rent_or_lease**: #5a Rent or Lease的金额
-  - **accident_waiver**: Accident Waiver的金额
-  - **minor_conviction_protection**: Minor Conviction Protection的金额
+  - **loss_of_use**: #20 Loss of Use条款是否存在 (true/false)
+  - **liab_to_unowned_veh**: #27 Liab to Unowned Veh.条款是否存在 (true/false)
+  - **limited_waiver**: #43a Limited Waiver条款是否存在 (true/false)
+  - **rent_or_lease**: #5a Rent or Lease条款是否存在 (true/false)
+  - **accident_waiver**: Accident Waiver条款是否存在 (true/false)
+  - **minor_conviction_protection**: Minor Conviction Protection条款是否存在 (true/false)
 
 ### 8. 备注信息
 - **remarks**: Remarks - Use this space if you have further details下方的所有内容
@@ -211,8 +210,7 @@ function getApplicationPrompt(): string {
 - **payment_info**:
   - **annual_premium**: 年保费总额，从"Total Estimated Cost"提取
   - **monthly_payment**: 月供金额，从"Amount of Each Instalment"提取
-  - **has_interest**: 是否有利息，如果Interest字段有数值则为true，否则为false
-  - **payment_type**: 如果has_interest为false则为"annual"，否则为"monthly"
+  - **payment_type**: 根据支付方式设置为"annual"或"monthly"
 
 ### 10. 签名确认
 - **signatures**:
@@ -250,36 +248,32 @@ function getApplicationPrompt(): string {
       "first_licensed_date": "2008-06-01"
     }
   ],
-  "insurance_coverages": {
-    "liability_amount": "1000000",
-    "property_damage_amount": "500",
-    "loss_or_damage": {
-      "comprehensive": {
-        "covered": true,
-        "deductible": "500",
-        "premium": "350"
-      },
-      "collision": {
-        "covered": true,
-        "deductible": "500",
-        "premium": "800"
-      },
-      "all_perils": null
-    }
-  },
-  "policy_change_forms": {
-    "loss_of_use": "2500",
-    "liab_to_unowned_veh": "50000",
-    "limited_waiver": "0",
-    "rent_or_lease": "0",
-    "accident_waiver": "0",
-    "minor_conviction_protection": "45"
-  },
+      "insurance_coverages": {
+      "liability_amount": "1000000",
+      "loss_or_damage": {
+        "comprehensive": {
+          "covered": true,
+          "deductible": "500"
+        },
+        "collision": {
+          "covered": true,
+          "deductible": "500"
+        },
+        "all_perils": null
+      }
+    },
+    "policy_change_forms": {
+      "loss_of_use": true,
+      "liab_to_unowned_veh": true,
+      "limited_waiver": false,
+      "rent_or_lease": false,
+      "accident_waiver": false,
+      "minor_conviction_protection": true
+    },
   "remarks": "Applicant Email - example@email.com\\nDrv. No. 1 - Graduated Licensing - G - 2010/06/15\\nDrv. No. 1 - Graduated Licensing - G1 - 2008/06/01\\nDrv. No. 1 - Graduated Licensing - G2 - 2009/08/15\\nGeneral - STANDARD COVERAGE\\nCOMMUTE TO OFFICE DAILY\\nMULTI-POLICY DISCOUNT\\nDeductible collision $500 & comp $500\\nPayment Plan - Annual",
   "payment_info": {
     "annual_premium": "2850.00",
     "monthly_payment": null,
-    "has_interest": false,
     "payment_type": "annual"
   },
   "signatures": {

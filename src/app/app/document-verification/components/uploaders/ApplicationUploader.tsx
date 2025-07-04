@@ -15,7 +15,7 @@ export default function ApplicationUploader({ documentState, onFileUpload }: App
       documentState={documentState}
       onFileUpload={onFileUpload}
       title="Application Forms"
-      description="Ontario汽车保险申请表 (OAF 1)"
+      description="Ontario (OAF 1)"
       icon={FileCheck}
       color="orange"
       inputId="application-upload"

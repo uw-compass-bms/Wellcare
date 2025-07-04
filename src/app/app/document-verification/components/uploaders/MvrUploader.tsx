@@ -15,7 +15,7 @@ export default function MvrUploader({ documentState, onFileUpload }: MvrUploader
       documentState={documentState}
       onFileUpload={onFileUpload}
       title="MVR Documents"
-      description="Motor Vehicle Record documents"
+      description="Driver Record Documents"
       icon={FileText}
       color="blue"
       inputId="mvr-upload"
