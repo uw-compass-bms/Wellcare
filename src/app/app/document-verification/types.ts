@@ -1,5 +1,3 @@
-import React from 'react';
-
 // 基础文档数据接口
 export interface BaseDocumentData {
   name: string | null;
@@ -191,16 +189,4 @@ export interface DocumentState {
   uploaded: boolean;
   cached: boolean; // 是否已缓存文件但未处理
   cachedFile: CachedFile | null; // 缓存的文件数据
-}
-
-// 文档配置类型
-export interface DocumentConfig {
-  type: DocumentType;
-  title: string;
-  description: string;
-  icon: React.ComponentType<{className?: string}>; // Lucide React图标类型
-  color: string;
-  bgColor: string;
-  borderColor: string;
-  apiEndpoint: string;
 } 

@@ -1,5 +1,4 @@
 "use client";
-import React from "react";
 import DocumentUploadSection from './components/DocumentUploadSection';
 import ResultsSection from './components/ResultsSection';
 import ProcessingControlPanel from './components/ProcessingControlPanel';
@@ -14,8 +13,6 @@ export default function DocumentVerification() {
     handleFileUpload,
     handleProcessAllDocuments
   } = useDocumentProcessing();
-
-
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -38,8 +35,6 @@ export default function DocumentVerification() {
         processingStep={processingStep}
         onProcessAllDocuments={handleProcessAllDocuments}
       />
-
-      {/* 验证区域已移除 */}
 
       {/* 结果展示区域 */}
       <ResultsSection documents={documents} />

@@ -1,5 +1,4 @@
 "use client";
-import React from 'react';
 import { DocumentType, DocumentState } from '../types';
 import AutoPlusUploader from './uploaders/AutoPlusUploader';
 import MvrUploader from './uploaders/MvrUploader';

@@ -1,5 +1,4 @@
 "use client";
-import React from 'react';
 import { Calculator } from 'lucide-react';
 import { DocumentState } from '../../types';
 import BaseUploader from './BaseUploader';

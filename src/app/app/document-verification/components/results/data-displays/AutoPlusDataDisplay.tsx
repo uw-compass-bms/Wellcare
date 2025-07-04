@@ -1,6 +1,5 @@
 'use client';
 
-import React from 'react';
 import { AutoPlusData } from '../../../types';
 
 interface AutoPlusDataDisplayProps {

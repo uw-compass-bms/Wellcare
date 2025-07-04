@@ -1,5 +1,4 @@
 "use client";
-import React from 'react';
 import { DocumentType, DocumentState } from '../types';
 import ProcessedDataTabs from './results/ProcessedDataTabs';
 import BusinessRulesValidation from './results/business-rules/BusinessRulesValidation';

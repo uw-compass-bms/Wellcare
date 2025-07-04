@@ -10,8 +10,6 @@ export function useDocumentProcessing() {
     quote: { data: null, loading: false, error: null, uploaded: false, cached: false, cachedFile: null },
     application: { data: null, loading: false, error: null, uploaded: false, cached: false, cachedFile: null }
   });
-
-  // 已移除验证相关状态
   
   // 批处理状态
   const [isProcessing, setIsProcessing] = useState(false);
@@ -121,8 +119,6 @@ export function useDocumentProcessing() {
       setProcessingStep(null);
     }
   };
-
-  // 已移除验证相关函数
 
   return {
     documents,
