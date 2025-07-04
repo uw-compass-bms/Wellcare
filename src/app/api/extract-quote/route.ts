@@ -36,6 +36,8 @@ You are an expert AI agent specializing in OCR and data extraction from insuranc
     -   **vehicle_model**: The model of the vehicle (e.g., "RX350", "CAMRY", "ACCORD", "Q5", "Q5 PROGRESSIV"). Look for this in the vehicle title section after the make. Include trim level if present (e.g., "Q5 PROGRESSIV"). Extract the specific model name.
     -   **garaging_location**: The garaging location, combining city and postal code. Look for fields labeled "Garaging Location" or similar.
     -   **leased**: A boolean value indicating if the vehicle is leased. Look for a field labeled "Leased" with "Yes" or "No" values.
+    -   **annual_mileage**: The estimated annual driving distance/mileage. Look for fields labeled "Annual km" or similar mileage information.
+    -   **commute_distance**: The daily commute distance in kilometers. Look for fields labeled "Daily km" or similar daily driving information.
 -   **Part 3: Customer Contact Information** (from top-right corner of the document)
     -   **customer_contact_info**: Extract the complete customer contact information typically found in the top-right corner of the quote document:
         -   **full_address**: The complete customer address including street, city, province, and postal code
@@ -76,6 +78,8 @@ You are an expert AI agent specializing in OCR and data extraction from insuranc
   "vehicle_model": "Q5 PROGRESSIV",
   "garaging_location": "UNIONVILLE L6G0H5",
   "leased": true,
+  "annual_mileage": "15000",
+  "commute_distance": "5",
   "customer_contact_info": {
     "full_address": "123 Main Street, Toronto, ON M5V 3A8",
     "email": "jane.doe@email.com",
@@ -332,6 +336,10 @@ export async function POST(request: NextRequest) {
         vehicle_model: parsedData.vehicle_model || null,
         garaging_location: parsedData.garaging_location || null,
         leased: parsedData.leased || null,
+        
+        // 里程和通勤信息
+        annual_mileage: parsedData.annual_mileage || null,
+        commute_distance: parsedData.commute_distance || null,
         
         // 客户联系信息
         customer_contact_info: parsedData.customer_contact_info || null,

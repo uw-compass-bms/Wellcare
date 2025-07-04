@@ -54,6 +54,15 @@ export default function QuoteDataDisplay({ data }: QuoteDataDisplayProps) {
         </div>
       </div>
 
+      {/* 使用信息 */}
+      <div>
+        <h4 className="font-medium text-gray-900 mb-3">Usage Information</h4>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div><strong>Annual Mileage:</strong> {data.annual_mileage || 'N/A'}</div>
+          <div><strong>Commute Distance:</strong> {data.commute_distance || 'N/A'}</div>
+        </div>
+      </div>
+
       {/* 客户联系信息 */}
       {data.customer_contact_info && (
         <div>

@@ -22,7 +22,7 @@ interface ApplicationData {
   vehicle_ownership: 'lease' | 'owned' | null;
   
   // 使用信息
-  estimated_annual_driving_distance: string | null;
+  annual_mileage: string | null;
   commute_distance: string | null;
   automobile_use_details: string | null;
   
@@ -166,7 +166,7 @@ function getApplicationPrompt(): string {
 - **vehicle_ownership**: 判断是"lease"还是"owned"，通过Lienholder信息和相关标记判断
 
 ### 4. 使用信息
-- **estimated_annual_driving_distance**: 年驾驶里程数
+- **annual_mileage**: 年驾驶里程数
 - **commute_distance**: 通勤单程距离(公里数)
 - **automobile_use_details**: Automobile Use部分的详细信息
 
@@ -235,7 +235,7 @@ function getApplicationPrompt(): string {
   "vin": "1A2B3C4D5E6F7G8H9",
   "lienholder_info": "Sample Leasing Company 456 Business Rd Toronto ON M2B 3C4",
   "vehicle_ownership": "lease",
-  "estimated_annual_driving_distance": "15000",
+  "annual_mileage": "15000",
   "commute_distance": "10",
   "automobile_use_details": null,
   "drivers": [

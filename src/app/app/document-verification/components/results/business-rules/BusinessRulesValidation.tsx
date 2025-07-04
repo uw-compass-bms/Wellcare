@@ -5,6 +5,7 @@ import { BusinessRuleResult } from './types';
 import { DocumentState, DocumentType } from '../../../types';
 import G1StartDateValidation from './G1StartDateValidation';
 import AnnualMileageValidation from './AnnualMileageValidation';
+import NewDriverValidation from './NewDriverValidation';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 
 interface BusinessRulesValidationProps {
@@ -52,7 +53,7 @@ export default function BusinessRulesValidation({ documents }: BusinessRulesVali
   };
 
   const overallStatus = getOverallStatus();
-  const totalRules = 2; // 目前有2个规则
+  const totalRules = 3; // 现在有3个规则
 
   return (
     <Card className="mt-6">
@@ -134,7 +135,13 @@ export default function BusinessRulesValidation({ documents }: BusinessRulesVali
               onResultChange={handleRuleResultChange}
             />
 
-            {/* 规则2: 年行驶公里数审核 */}
+            {/* 规则2: 新司机判定 */}
+            <NewDriverValidation
+              documents={preparedDocuments}
+              onResultChange={handleRuleResultChange}
+            />
+
+            {/* 规则3: 年行驶公里数审核 */}
             <AnnualMileageValidation
               documents={preparedDocuments}
               onResultChange={handleRuleResultChange}

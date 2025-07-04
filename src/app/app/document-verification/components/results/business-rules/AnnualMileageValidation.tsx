@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import { BusinessRuleProps, BusinessRuleResult, RULE_STATUS_CONFIG } from './types';
-import { ApplicationData } from '../../../types';
+import { ApplicationData, QuoteData } from '../../../types';
 
 export default function AnnualMileageValidation({ documents, onResultChange }: BusinessRuleProps) {
   const [result, setResult] = useState<BusinessRuleResult | null>(null);
@@ -16,30 +16,34 @@ export default function AnnualMileageValidation({ documents, onResultChange }: B
   useEffect(() => {
     const validateRule = () => {
       const application = documents.application as ApplicationData;
+      const quote = documents.quote as QuoteData;
 
-      // 检查必要数据是否存在
-      if (!application || !application.estimated_annual_driving_distance) {
+      // 检查必要数据是否存在 - 优先从Application获取，然后从Quote获取
+      const annualDistance = application?.annual_mileage || quote?.annual_mileage;
+      const commuteDistance = application?.commute_distance || quote?.commute_distance;
+
+      if (!annualDistance) {
         const insufficientDataResult: BusinessRuleResult = {
           id: 'annual_mileage',
-          name: 'Annual Mileage Validation',
+          name: 'Annual Mileage & Commute Validation',
           status: 'insufficient_data',
-          recommendation: 'Upload complete Application form with annual driving distance information',
-          details: 'Missing required Application data: Estimated annual driving distance not found',
-          data_sources: ['Application']
+          recommendation: 'Upload complete Application or Quote with annual driving distance information',
+          details: 'Missing required data: Annual driving distance not found in Application or Quote',
+          data_sources: ['Application', 'Quote']
         };
         setResult(insufficientDataResult);
         onResultChangeRef.current?.(insufficientDataResult);
         return;
       }
 
-      // 获取年行驶距离数据
-      const annualDistance = application.estimated_annual_driving_distance;
-      const numericDistance = parseFloat(annualDistance.replace(/[^\d.]/g, '')); // 提取数字部分
+      // 解析年行驶距离数据
+      const numericAnnualDistance = parseFloat(annualDistance.replace(/[^\d.]/g, ''));
+      const numericCommuteDistance = commuteDistance ? parseFloat(commuteDistance.replace(/[^\d.]/g, '')) : null;
 
-      if (isNaN(numericDistance)) {
+      if (isNaN(numericAnnualDistance)) {
         const failedResult: BusinessRuleResult = {
           id: 'annual_mileage',
-          name: 'Annual Mileage Validation',
+          name: 'Annual Mileage & Commute Validation',
           status: 'failed',
           result: {
             reported_distance: annualDistance,
@@ -47,7 +51,7 @@ export default function AnnualMileageValidation({ documents, onResultChange }: B
           },
           recommendation: 'Contact customer to clarify annual driving distance format',
           details: `Unable to parse annual driving distance: "${annualDistance}". Please verify the format.`,
-          data_sources: ['Application']
+          data_sources: application?.annual_mileage ? ['Application'] : ['Quote']
         };
         setResult(failedResult);
         onResultChangeRef.current?.(failedResult);
@@ -55,39 +59,72 @@ export default function AnnualMileageValidation({ documents, onResultChange }: B
       }
 
       const LOW_MILEAGE_THRESHOLD = 8000; // 低里程阈值
+      const MIN_COMMUTE_DISTANCE = 5; // 最小通勤距离阈值
       let ruleResult: BusinessRuleResult;
 
-      if (numericDistance > LOW_MILEAGE_THRESHOLD) {
-        // 超过8000公里，审核通过
+      // 判断各种情况
+      const isLowMileage = numericAnnualDistance <= LOW_MILEAGE_THRESHOLD;
+      const isLowCommute = numericCommuteDistance !== null && numericCommuteDistance < MIN_COMMUTE_DISTANCE;
+      const isZeroCommute = numericCommuteDistance === 0;
+
+      if (isLowMileage || isLowCommute || isZeroCommute) {
+        // 需要审核的情况
+        let issues = [];
+        if (isLowMileage) {
+          issues.push(`Annual mileage (${numericAnnualDistance.toLocaleString()} km) is at or below ${LOW_MILEAGE_THRESHOLD.toLocaleString()} km threshold`);
+        }
+        if (isZeroCommute) {
+          issues.push(`Zero commute distance reported`);
+        } else if (isLowCommute) {
+          issues.push(`Low commute distance (${numericCommuteDistance} km) is below ${MIN_COMMUTE_DISTANCE} km threshold`);
+        }
+
         ruleResult = {
           id: 'annual_mileage',
-          name: 'Annual Mileage Validation',
-          status: 'passed',
-          result: {
-            reported_distance: annualDistance,
-            parsed_distance: numericDistance,
-            threshold: LOW_MILEAGE_THRESHOLD,
-            classification: 'Normal Mileage'
-          },
-          recommendation: 'No further action required. Annual mileage is within normal range.',
-          details: `Annual driving distance (${numericDistance.toLocaleString()} km) exceeds ${LOW_MILEAGE_THRESHOLD.toLocaleString()} km threshold. No additional review required.`,
-          data_sources: ['Application']
-        };
-      } else {
-        // 8000公里或以下，需要标记和审核
-        ruleResult = {
-          id: 'annual_mileage',
-          name: 'Annual Mileage Validation',
+          name: 'Annual Mileage & Commute Validation',
           status: 'requires_review',
           result: {
             reported_distance: annualDistance,
-            parsed_distance: numericDistance,
+            parsed_distance: numericAnnualDistance,
             threshold: LOW_MILEAGE_THRESHOLD,
-            classification: 'Low Mileage - Requires Review'
+            commute_distance: commuteDistance,
+            parsed_commute: numericCommuteDistance,
+            commute_threshold: MIN_COMMUTE_DISTANCE,
+            classification: 'Requires Review - ' + (isLowMileage ? 'Low Mileage' : '') + 
+                           (isLowMileage && (isLowCommute || isZeroCommute) ? ' & ' : '') + 
+                           (isZeroCommute ? 'Zero Commute' : isLowCommute ? 'Low Commute' : ''),
+            issues: issues
           },
-          recommendation: 'Mark low mileage situation and submit for supervisor review',
-          details: `Annual driving distance (${numericDistance.toLocaleString()} km) is at or below ${LOW_MILEAGE_THRESHOLD.toLocaleString()} km threshold. This requires special attention and supervisor approval.`,
-          data_sources: ['Application']
+          recommendation: 'Mark for supervisor review and verify customer driving patterns',
+          details: `Issues found: ${issues.join('; ')}. This requires special attention and supervisor approval.`,
+          data_sources: [
+            ...(application?.annual_mileage ? ['Application'] : []),
+            ...(quote?.annual_mileage ? ['Quote'] : [])
+          ]
+        };
+      } else {
+        // 审核通过
+        ruleResult = {
+          id: 'annual_mileage',
+          name: 'Annual Mileage & Commute Validation',
+          status: 'passed',
+          result: {
+            reported_distance: annualDistance,
+            parsed_distance: numericAnnualDistance,
+            threshold: LOW_MILEAGE_THRESHOLD,
+            commute_distance: commuteDistance,
+            parsed_commute: numericCommuteDistance,
+            commute_threshold: MIN_COMMUTE_DISTANCE,
+            classification: 'Normal Usage Pattern'
+          },
+          recommendation: 'No further action required. Annual mileage and commute distance are within normal range.',
+          details: `Annual driving distance (${numericAnnualDistance.toLocaleString()} km) exceeds ${LOW_MILEAGE_THRESHOLD.toLocaleString()} km threshold` +
+                   (numericCommuteDistance !== null ? ` and commute distance (${numericCommuteDistance} km) is acceptable` : '') + 
+                   '. No additional review required.',
+          data_sources: [
+            ...(application?.annual_mileage ? ['Application'] : []),
+            ...(quote?.annual_mileage ? ['Quote'] : [])
+          ]
         };
       }
 
@@ -124,17 +161,13 @@ export default function AnnualMileageValidation({ documents, onResultChange }: B
         
         {result.result && (
           <div className="mt-3 p-3 bg-white rounded border">
-            <strong>Mileage Analysis:</strong>
+            <strong>Analysis:</strong>
             <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
-              <div><strong>Reported Distance:</strong> {result.result.reported_distance}</div>
-              <div><strong>Parsed Distance:</strong> {typeof result.result.parsed_distance === 'number' 
+              <div><strong>Annual:</strong> {typeof result.result.parsed_distance === 'number' 
                 ? `${result.result.parsed_distance.toLocaleString()} km` 
                 : result.result.parsed_distance}</div>
-              {result.result.threshold && (
-                <div><strong>Threshold:</strong> {result.result.threshold.toLocaleString()} km</div>
-              )}
-              {result.result.classification && (
-                <div><strong>Classification:</strong> {result.result.classification}</div>
+              {result.result.parsed_commute !== null && (
+                <div><strong>Commute:</strong> {result.result.parsed_commute} km</div>
               )}
             </div>
             
@@ -142,10 +175,16 @@ export default function AnnualMileageValidation({ documents, onResultChange }: B
               <div className="mt-3 p-2 bg-yellow-100 border border-yellow-300 rounded text-xs">
                 <strong>Required Actions:</strong>
                 <ul className="mt-1 ml-4 list-disc space-y-1">
-                  <li>Mark this application for low mileage review</li>
-                  <li>Submit to supervisor for approval</li>
+                  {result.result.issues?.map((issue: string, index: number) => (
+                    <li key={index} className="text-red-700 font-medium">{issue}</li>
+                  ))}
+                </ul>
+                <ul className="mt-2 ml-4 list-disc space-y-1">
+                  <li>Mark this application for supervisor review</li>
+                  <li>Verify customer driving patterns and usage</li>
                   <li>Update system notes with review status</li>
                   <li>Consider requesting additional documentation if needed</li>
+                  <li>Confirm annual mileage and commute distance accuracy</li>
                 </ul>
               </div>
             )}

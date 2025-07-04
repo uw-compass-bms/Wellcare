@@ -61,7 +61,7 @@ export default function ApplicationDataDisplay({ data }: ApplicationDataDisplayP
       <div>
         <h4 className="font-medium text-gray-900 mb-3">Usage Information</h4>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div><strong>Annual Driving Distance:</strong> {data.estimated_annual_driving_distance || 'N/A'}</div>
+          <div><strong>Annual Driving Distance:</strong> {data.annual_mileage || 'N/A'}</div>
           <div><strong>Commute Distance:</strong> {data.commute_distance || 'N/A'}</div>
         </div>
         {data.automobile_use_details && (

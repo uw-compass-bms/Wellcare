@@ -49,6 +49,10 @@ export interface QuoteData extends BaseDocumentData {
   garaging_location: string | null;
   leased: boolean | null;
   
+  // 里程和通勤信息
+  annual_mileage: string | null; // 年度驾驶里程
+  commute_distance: string | null; // 通勤距离
+  
   // 客户联系信息
   customer_contact_info: {
     full_address: string | null;
@@ -101,7 +105,7 @@ export interface ApplicationData extends BaseDocumentData {
   vehicle_ownership: 'lease' | 'owned' | null; // 判断是lease还是owned
   
   // 使用信息
-  estimated_annual_driving_distance: string | null;
+  annual_mileage: string | null;
   commute_distance: string | null; // 通勤单程距离
   automobile_use_details: string | null;
   
