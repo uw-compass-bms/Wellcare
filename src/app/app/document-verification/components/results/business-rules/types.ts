@@ -90,4 +90,32 @@ export const subtractYears = (dateString: string | null, years: number): string 
   } catch {
     return null;
   }
+};
+
+// 计算两个日期之间的年数差异
+export const getYearsDifference = (earlierDate: string | null, laterDate: string | null): number | null => {
+  if (!earlierDate || !laterDate) return null;
+  try {
+    const earlier = new Date(earlierDate);
+    const later = new Date(laterDate);
+    const diffTime = later.getTime() - earlier.getTime();
+    const diffYears = diffTime / (1000 * 60 * 60 * 24 * 365.25); // 考虑闰年
+    return Math.abs(diffYears);
+  } catch {
+    return null;
+  }
+};
+
+// 比较两个日期是否相同（容忍度为30天）
+export const datesAreClose = (date1: string | null, date2: string | null, toleranceDays: number = 30): boolean => {
+  if (!date1 || !date2) return false;
+  try {
+    const d1 = new Date(date1);
+    const d2 = new Date(date2);
+    const diffTime = Math.abs(d2.getTime() - d1.getTime());
+    const diffDays = diffTime / (1000 * 60 * 60 * 24);
+    return diffDays <= toleranceDays;
+  } catch {
+    return false;
+  }
 }; 

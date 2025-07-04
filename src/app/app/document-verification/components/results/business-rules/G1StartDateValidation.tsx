@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useEffect, useState, useRef } from 'react';
-import { BusinessRuleProps, BusinessRuleResult, RULE_STATUS_CONFIG, formatDate, getMonthDay, subtractYears } from './types';
-import { MvrData } from '../../../types';
+import { BusinessRuleProps, BusinessRuleResult, RuleStatus, RULE_STATUS_CONFIG, formatDate, getMonthDay, subtractYears, getYearsDifference, datesAreClose } from './types';
+import { MvrData, QuoteData, AutoPlusData } from '../../../types';
 
 export default function G1StartDateValidation({ documents, onResultChange }: BusinessRuleProps) {
   const [result, setResult] = useState<BusinessRuleResult | null>(null);
@@ -16,12 +16,14 @@ export default function G1StartDateValidation({ documents, onResultChange }: Bus
   useEffect(() => {
     const validateRule = () => {
       const mvr = documents.mvr as MvrData;
+      const quote = documents.quote as QuoteData;
+      const autoplus = documents.autoplus as AutoPlusData;
 
       // 检查必要数据是否存在
       if (!mvr || !mvr.date_of_birth || !mvr.expiry_date) {
         const insufficientDataResult: BusinessRuleResult = {
           id: 'g1_start_date',
-          name: 'G1 Start Date Calculation',
+          name: 'G1 Start Date Validation & Cross-Document Verification',
           status: 'insufficient_data',
           recommendation: 'Upload complete MVR document with Birth Date and Expiry Date',
           details: 'Missing required MVR data: Birth Date or Expiry Date not found',
@@ -32,49 +34,28 @@ export default function G1StartDateValidation({ documents, onResultChange }: Bus
         return;
       }
 
-      // 获取MVR数据
+      // 获取所有相关数据
       const birthDate = mvr.date_of_birth;
       const expiryDate = mvr.expiry_date;
       const issueDate = mvr.issue_date;
+      const quoteG1Date = quote?.date_g1;
+      const quoteG2Date = quote?.date_g2;
+      const quoteGDate = quote?.date_g;
+      const firstInsuranceDate = autoplus?.first_insurance_date;
 
-      // 获取生日和到期日的月日部分
+      // 第一步：计算MVR的G1日期（保持原有逻辑）
       const birthMonthDay = getMonthDay(birthDate);
       const expiryMonthDay = getMonthDay(expiryDate);
-
       let calculatedG1Date: string | null = null;
       let calculationMethod = '';
-      let ruleResult: BusinessRuleResult;
+      let g1CalculationValid = false;
 
       if (birthMonthDay && expiryMonthDay && birthMonthDay === expiryMonthDay) {
         // 月日一致：使用Issue Date作为G1起始时间
         if (issueDate) {
           calculatedG1Date = issueDate;
           calculationMethod = 'Used Issue Date (Birth Date and Expiry Date have matching month/day)';
-          
-          ruleResult = {
-            id: 'g1_start_date',
-            name: 'G1 Start Date Calculation',
-            status: 'passed',
-            result: {
-              calculated_g1_date: formatDate(calculatedG1Date),
-              method: calculationMethod,
-              birth_date: formatDate(birthDate),
-              expiry_date: formatDate(expiryDate),
-              issue_date: formatDate(issueDate)
-            },
-            recommendation: 'No further action required. G1 start date successfully calculated.',
-            details: `Birth Date (${formatDate(birthDate)}) and Expiry Date (${formatDate(expiryDate)}) have matching month/day. Using Issue Date (${formatDate(issueDate)}) as G1 start date.`,
-            data_sources: ['MVR']
-          };
-        } else {
-          ruleResult = {
-            id: 'g1_start_date',
-            name: 'G1 Start Date Calculation',
-            status: 'failed',
-            recommendation: 'Contact customer to confirm actual G1 acquisition date or provide Driver\'s Licence History',
-            details: `Birth Date (${formatDate(birthDate)}) and Expiry Date (${formatDate(expiryDate)}) have matching month/day, but Issue Date is missing from MVR.`,
-            data_sources: ['MVR']
-          };
+          g1CalculationValid = true;
         }
       } else {
         // 月日不一致：到期日减去5年
@@ -86,54 +67,107 @@ export default function G1StartDateValidation({ documents, onResultChange }: Bus
           const birthYear = new Date(birthDate).getFullYear();
           const calculatedYear = new Date(calculatedG1Date).getFullYear();
           const ageAtG1 = calculatedYear - birthYear;
-          
-          if (ageAtG1 >= 16 && ageAtG1 <= 25) { // 合理的G1考取年龄范围
-            ruleResult = {
-              id: 'g1_start_date',
-              name: 'G1 Start Date Calculation',
-              status: 'passed',
-              result: {
-                calculated_g1_date: formatDate(calculatedG1Date),
-                method: calculationMethod,
-                birth_date: formatDate(birthDate),
-                expiry_date: formatDate(expiryDate),
-                age_at_g1: ageAtG1
-              },
-              recommendation: 'No further action required. G1 start date successfully calculated.',
-              details: `Birth Date (${formatDate(birthDate)}) and Expiry Date (${formatDate(expiryDate)}) have different month/day. Calculated G1 start date: ${formatDate(calculatedG1Date)} (age ${ageAtG1}).`,
-              data_sources: ['MVR']
-            };
-          } else {
-            ruleResult = {
-              id: 'g1_start_date',
-              name: 'G1 Start Date Calculation',
-              status: 'failed',
-              result: {
-                calculated_g1_date: formatDate(calculatedG1Date),
-                method: calculationMethod,
-                birth_date: formatDate(birthDate),
-                expiry_date: formatDate(expiryDate),
-                age_at_g1: ageAtG1
-              },
-              recommendation: 'Contact customer to confirm actual G1 acquisition date or provide Driver\'s Licence History',
-              details: `Calculated G1 start date (${formatDate(calculatedG1Date)}) results in unreasonable age at G1 acquisition (${ageAtG1} years old). Please verify data.`,
-              data_sources: ['MVR']
-            };
-          }
-        } else {
-          ruleResult = {
-            id: 'g1_start_date',
-            name: 'G1 Start Date Calculation',
-            status: 'failed',
-            recommendation: 'Contact customer to confirm actual G1 acquisition date or provide Driver\'s Licence History',
-            details: 'Failed to calculate G1 start date from Expiry Date',
-            data_sources: ['MVR']
-          };
+          g1CalculationValid = ageAtG1 >= 16 && ageAtG1 <= 25;
         }
       }
 
-                setResult(ruleResult);
-          onResultChangeRef.current?.(ruleResult);
+      // 第二步：跨文档日期对比
+      const issues: string[] = [];
+      const warnings: string[] = [];
+      const successes: string[] = [];
+      const dataSources: string[] = ['MVR'];
+
+      // MVR G1日期计算结果
+      if (g1CalculationValid && calculatedG1Date) {
+        successes.push(`MVR G1 date calculated successfully: ${formatDate(calculatedG1Date)}`);
+      } else {
+        issues.push('MVR G1 date calculation failed or unreasonable');
+      }
+
+      // Quote G1日期对比
+      if (quoteG1Date && calculatedG1Date) {
+        dataSources.push('Quote');
+        if (datesAreClose(calculatedG1Date, quoteG1Date)) {
+          successes.push(`Quote G1 date matches MVR calculated G1 date (${formatDate(quoteG1Date)})`);
+        } else {
+          warnings.push(`Quote G1 date (${formatDate(quoteG1Date)}) differs from MVR calculated G1 date (${formatDate(calculatedG1Date)})`);
+        }
+      } else if (quoteG1Date) {
+        dataSources.push('Quote');
+        warnings.push('Quote G1 date available but MVR G1 calculation failed');
+      }
+
+      // 第三步：10年规则验证
+      let tenYearRuleTriggered = false;
+      if (firstInsuranceDate && autoplus) {
+        dataSources.push('Auto+');
+        
+        // 确定G2/G日期（优先使用G2，如果没有则使用G）
+        const licenseDate = quoteG2Date || quoteGDate;
+        
+        if (licenseDate) {
+          const yearsDiff = getYearsDifference(licenseDate, firstInsuranceDate);
+          
+          if (yearsDiff !== null && yearsDiff >= 10) {
+            tenYearRuleTriggered = true;
+            issues.push(`G2/G license date (${formatDate(licenseDate)}) is ${yearsDiff.toFixed(1)} years earlier than first insurance date (${formatDate(firstInsuranceDate)}) - Driver's License History must be obtained to verify license dates`);
+          } else if (yearsDiff !== null) {
+            successes.push(`G2/G license date (${formatDate(licenseDate)}) and first insurance date (${formatDate(firstInsuranceDate)}) are within acceptable range (${yearsDiff.toFixed(1)} years)`);
+          }
+        } else {
+          warnings.push('G2/G license date not available from Quote - cannot verify 10-year rule');
+        }
+      }
+
+      // 第四步：确定最终状态和建议
+      let finalStatus: RuleStatus;
+      let recommendation: string;
+      let details: string;
+
+      if (issues.length > 0) {
+        finalStatus = 'failed';
+        if (tenYearRuleTriggered) {
+          recommendation = 'Driver\'s License History must be obtained to verify the license dates';
+        } else {
+          recommendation = 'Contact customer to confirm actual G1 acquisition date or provide Driver\'s License History';
+        }
+        details = issues.join('. ') + (warnings.length > 0 ? '. Additional warnings: ' + warnings.join('. ') : '');
+      } else if (warnings.length > 0) {
+        finalStatus = 'requires_review';
+        recommendation = 'Review date discrepancies and consider contacting customer for clarification';
+        details = warnings.join('. ') + (successes.length > 0 ? '. Successful validations: ' + successes.join('. ') : '');
+      } else {
+        finalStatus = 'passed';
+        recommendation = 'No further action required. All G1 date validations passed.';
+        details = successes.join('. ');
+      }
+
+      const ruleResult: BusinessRuleResult = {
+        id: 'g1_start_date',
+        name: 'G1 Start Date Validation & Cross-Document Verification',
+        status: finalStatus,
+        result: {
+          mvr_calculated_g1_date: formatDate(calculatedG1Date),
+          calculation_method: calculationMethod,
+          quote_g1_date: formatDate(quoteG1Date),
+          quote_g2_date: formatDate(quoteG2Date),
+          quote_g_date: formatDate(quoteGDate),
+          first_insurance_date: formatDate(firstInsuranceDate),
+          birth_date: formatDate(birthDate),
+          expiry_date: formatDate(expiryDate),
+          issue_date: formatDate(issueDate),
+          ten_year_rule_triggered: tenYearRuleTriggered,
+          g1_dates_match: calculatedG1Date && quoteG1Date ? datesAreClose(calculatedG1Date, quoteG1Date) : null,
+          license_insurance_years_diff: firstInsuranceDate && (quoteG2Date || quoteGDate) ? 
+            getYearsDifference(quoteG2Date || quoteGDate!, firstInsuranceDate) : null
+        },
+        recommendation,
+        details,
+        data_sources: dataSources
+      };
+
+      setResult(ruleResult);
+      onResultChangeRef.current?.(ruleResult);
     };
 
     validateRule();
@@ -165,17 +199,54 @@ export default function G1StartDateValidation({ documents, onResultChange }: Bus
         
         {result.result && (
           <div className="mt-3 p-3 bg-white rounded border">
-            <strong>Calculation Result:</strong>
-            <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
-              <div><strong>Calculated G1 Date:</strong> {result.result.calculated_g1_date}</div>
-              <div><strong>Method:</strong> {result.result.method}</div>
-              <div><strong>Birth Date:</strong> {result.result.birth_date}</div>
-              <div><strong>Expiry Date:</strong> {result.result.expiry_date}</div>
-              {result.result.issue_date && (
-                <div><strong>Issue Date:</strong> {result.result.issue_date}</div>
+            <strong>Validation Results:</strong>
+            <div className="mt-2 space-y-3">
+              {/* MVR计算结果 */}
+              <div className="border-l-4 border-blue-500 pl-3">
+                <h5 className="font-medium text-sm text-blue-900">MVR G1 Calculation</h5>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs mt-1">
+                  <div><strong>Calculated G1 Date:</strong> {result.result.mvr_calculated_g1_date}</div>
+                  <div><strong>Method:</strong> {result.result.calculation_method}</div>
+                  <div><strong>Birth Date:</strong> {result.result.birth_date}</div>
+                  <div><strong>Expiry Date:</strong> {result.result.expiry_date}</div>
+                  {result.result.issue_date !== 'N/A' && (
+                    <div><strong>Issue Date:</strong> {result.result.issue_date}</div>
+                  )}
+                </div>
+              </div>
+              
+              {/* Quote对比结果 */}
+              {result.result.quote_g1_date !== 'N/A' && (
+                <div className="border-l-4 border-green-500 pl-3">
+                  <h5 className="font-medium text-sm text-green-900">Quote G1 Comparison</h5>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs mt-1">
+                    <div><strong>Quote G1 Date:</strong> {result.result.quote_g1_date}</div>
+                    <div><strong>Dates Match:</strong> {result.result.g1_dates_match ? 'Yes' : 'No'}</div>
+                    {result.result.quote_g2_date !== 'N/A' && (
+                      <div><strong>Quote G2 Date:</strong> {result.result.quote_g2_date}</div>
+                    )}
+                    {result.result.quote_g_date !== 'N/A' && (
+                      <div><strong>Quote G Date:</strong> {result.result.quote_g_date}</div>
+                    )}
+                  </div>
+                </div>
               )}
-              {result.result.age_at_g1 && (
-                <div><strong>Age at G1:</strong> {result.result.age_at_g1} years</div>
+              
+              {/* 10年规则验证 */}
+              {result.result.first_insurance_date !== 'N/A' && (
+                <div className={`border-l-4 ${result.result.ten_year_rule_triggered ? 'border-red-500' : 'border-yellow-500'} pl-3`}>
+                  <h5 className={`font-medium text-sm ${result.result.ten_year_rule_triggered ? 'text-red-900' : 'text-yellow-900'}`}>
+                    10-Year Rule Verification
+                  </h5>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs mt-1">
+                    <div><strong>First Insurance Date:</strong> {result.result.first_insurance_date}</div>
+                    <div><strong>License Date:</strong> {result.result.quote_g2_date !== 'N/A' ? result.result.quote_g2_date : result.result.quote_g_date}</div>
+                    {result.result.license_insurance_years_diff !== null && (
+                      <div><strong>Years Difference:</strong> {result.result.license_insurance_years_diff.toFixed(1)} years</div>
+                    )}
+                    <div><strong>10-Year Rule Triggered:</strong> {result.result.ten_year_rule_triggered ? 'Yes' : 'No'}</div>
+                  </div>
+                </div>
               )}
             </div>
           </div>

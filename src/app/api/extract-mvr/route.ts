@@ -93,7 +93,7 @@ function getMvrPrompt(): string {
 - **conditions**: An array of objects for items under "CONDITIONS AND ENDORSEMENTS". Each object should have:
   - date: The date if available (YYYY-MM-DD format) or null
   - description: The condition description
-  **IGNORE the following text patterns:** "REQUIRES CORRECTIVE LENSES", "SEARCH SUCCESSFUL - NO PUBLIC RECORD" - these are not actual conditions.
+  **IGNORE the following text patterns:** "REQUIRES CORRECTIVE LENSES", "CORRECTIVE LENSES", "SEARCH SUCCESSFUL - NO PUBLIC RECORD" - these are not actual license conditions.
 - **convictions**: An array of objects for items under "CONVICTIONS, DISCHARGES AND OTHER ACTIONS". Each object should have:
   - date: The conviction date (YYYY-MM-DD format) - USE THE DATE FROM THE "DATE" COLUMN OR THE DATE LISTED BELOW THE CONVICTION, NOT the date mentioned in the description text
   - description: The conviction description (e.g., "SPEEDING", "DISOBEY LEGAL SIGN", etc.)
