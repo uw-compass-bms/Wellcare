@@ -38,11 +38,25 @@ export interface G1StartDateResult {
   license_insurance_years_diff?: number | null;
 }
 
+// 车辆年龄与保险覆盖验证结果
+export interface VehicleAgeResult {
+  vehicle_year?: string | null;
+    vehicle_age?: number;
+  current_year?: number;
+  coverage_details?: {
+    liability?: string | null;
+    comprehensive?: boolean;
+    collision?: boolean;
+    all_perils?: boolean;
+  };
+  risk_level?: 'high' | 'medium' | 'low';
+}
+
 export interface BusinessRuleResult {
   id: string;
   name: string;
   status: RuleStatus;
-  result?: AnnualMileageResult | NewDriverResult | G1StartDateResult | Record<string, unknown>; // 推算的结果值
+  result?: AnnualMileageResult | NewDriverResult | G1StartDateResult | VehicleAgeResult | Record<string, unknown>; // 推算的结果值
   recommendation: string; // 操作建议
   details: string; // 详细说明
   data_sources?: string[]; // 使用的数据源

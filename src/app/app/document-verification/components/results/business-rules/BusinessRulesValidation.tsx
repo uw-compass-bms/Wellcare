@@ -6,6 +6,7 @@ import { DocumentState, DocumentType } from '../../../types';
 import G1StartDateValidation from './G1StartDateValidation';
 import AnnualMileageValidation from './AnnualMileageValidation';
 import NewDriverValidation from './NewDriverValidation';
+import VehicleAgeValidation from './VehicleAgeValidation';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 
 interface BusinessRulesValidationProps {
@@ -53,7 +54,7 @@ export default function BusinessRulesValidation({ documents }: BusinessRulesVali
   };
 
   const overallStatus = getOverallStatus();
-  const totalRules = 3; // 现在有3个规则
+  const totalRules = 4; // 现在有4个规则
 
   return (
     <Card className="mt-6">
@@ -147,10 +148,16 @@ export default function BusinessRulesValidation({ documents }: BusinessRulesVali
               onResultChange={handleRuleResultChange}
             />
 
+            {/* 规则4: 车辆年龄与保险覆盖审核 */}
+            <VehicleAgeValidation
+              documents={preparedDocuments}
+              onResultChange={handleRuleResultChange}
+            />
+
             {/* 未来规则占位符 */}
             <div className="p-4 border-2 border-dashed border-gray-200 rounded-lg text-center text-gray-500">
               <p className="text-sm">Additional business rules will be added here...</p>
-              <p className="text-xs mt-1">Total planned rules: 36</p>
+              <p className="text-xs mt-1">Total planned rules: 32</p>
             </div>
           </div>
 

@@ -36,12 +36,20 @@ export default function BaseUploader({
 
   // 获取状态样式
   const getStatusStyles = () => {
+    if (documentState.loading) {
+      return {
+        border: `border-${color}-300 border-2`,
+        bg: `bg-${color}-50`,
+        iconColor: `text-${color}-600`,
+        status: 'extracting'
+      };
+    }
     if (documentState.uploaded) {
       return {
         border: 'border-green-200 border-2',
         bg: 'bg-green-50',
         iconColor: 'text-green-600',
-        status: 'processed'
+        status: 'extracted'
       };
     }
     if (documentState.cached) {
@@ -49,7 +57,15 @@ export default function BaseUploader({
         border: `border-${color}-200 border-2`,
         bg: `bg-${color}-50`,
         iconColor: `text-${color}-600`,
-        status: 'cached'
+        status: 'pending_extraction'
+      };
+    }
+    if (documentState.error) {
+      return {
+        border: 'border-red-200 border-2',
+        bg: 'bg-red-50',
+        iconColor: 'text-red-600',
+        status: 'error'
       };
     }
     return {
@@ -64,14 +80,17 @@ export default function BaseUploader({
 
   // 获取状态描述
   const getStatusDescription = () => {
-    if (documentState.uploaded) return 'Processed successfully';
-    if (documentState.cached) return 'Ready for processing';
+    if (documentState.loading) return 'Extracting data...';
+    if (documentState.uploaded) return 'Data extracted successfully';
+    if (documentState.cached) return 'Ready for extraction';
+    if (documentState.error) return 'Extraction failed';
     return description;
   };
 
   // 获取按钮文本
   const getButtonText = () => {
-    if (documentState.uploaded) return `Re-upload ${title}`;
+    if (documentState.loading) return 'Extracting...';
+    if (documentState.uploaded) return `Replace ${title}`;
     if (documentState.cached) return `Replace ${title}`;
     return `Upload ${title}`;
   };
@@ -93,13 +112,18 @@ export default function BaseUploader({
       <CardHeader className="text-center">
         <div className={`w-16 h-16 ${statusStyles.bg} rounded-full flex items-center justify-center mx-auto mb-4 relative`}>
           <Icon className={`w-8 h-8 ${statusStyles.iconColor}`} />
-          {documentState.uploaded && (
+          {documentState.loading && (
+            <div className="absolute -top-1 -right-1 w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center">
+              <Loader2 className="w-4 h-4 text-white animate-spin" />
+            </div>
+          )}
+          {documentState.uploaded && !documentState.loading && (
             <div className="absolute -top-1 -right-1 w-6 h-6 bg-green-500 rounded-full flex items-center justify-center">
               <CheckCircle className="w-4 h-4 text-white" />
             </div>
           )}
-          {documentState.cached && !documentState.uploaded && (
-            <div className="absolute -top-1 -right-1 w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center">
+          {documentState.cached && !documentState.uploaded && !documentState.loading && (
+            <div className="absolute -top-1 -right-1 w-6 h-6 bg-orange-500 rounded-full flex items-center justify-center">
               <Clock className="w-4 h-4 text-white" />
             </div>
           )}

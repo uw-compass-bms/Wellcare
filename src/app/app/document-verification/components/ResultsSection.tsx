@@ -5,9 +5,17 @@ import BusinessRulesValidation from './results/business-rules/BusinessRulesValid
 
 interface ResultsSectionProps {
   documents: Record<DocumentType, DocumentState>;
+  onReprocessDocument?: (type: DocumentType) => Promise<void>;
+  isProcessing?: boolean;
+  processingStep?: DocumentType | null;
 }
 
-export default function ResultsSection({ documents }: ResultsSectionProps) {
+export default function ResultsSection({ 
+  documents, 
+  onReprocessDocument, 
+  isProcessing, 
+  processingStep 
+}: ResultsSectionProps) {
   // Check if any documents have been uploaded
   const hasUploadedDocuments = Object.values(documents).some(doc => doc.uploaded);
   
@@ -16,7 +24,12 @@ export default function ResultsSection({ documents }: ResultsSectionProps) {
   return (
     <div className="space-y-8">
       {/* Processed data tabs */}
-      <ProcessedDataTabs documents={documents} />
+      <ProcessedDataTabs 
+        documents={documents} 
+        onReprocessDocument={onReprocessDocument}
+        isProcessing={isProcessing}
+        processingStep={processingStep}
+      />
       
       {/* Business rules validation */}
       <BusinessRulesValidation documents={documents} />

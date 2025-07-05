@@ -33,7 +33,10 @@ export function useDocumentProcessing() {
           loading: false, 
           error: null, 
           cached: true,
-          cachedFile: cachedFile
+          cachedFile: cachedFile,
+          // Reset extraction state when new file uploaded
+          uploaded: false,
+          data: null
         }
       }));
 
@@ -87,77 +90,38 @@ export function useDocumentProcessing() {
     }
   };
 
-  // Reprocess single document (clear previous data and reprocess)
-  const reprocessDocument = async (type: DocumentType) => {
-    const cachedFile = documents[type].cachedFile;
-    if (!cachedFile) return;
 
-    // Clear previous data
-    setDocuments(prev => ({
-      ...prev,
-      [type]: { 
-        ...prev[type], 
-        data: null, 
-        uploaded: false, 
-        loading: true, 
-        error: null 
-      }
-    }));
 
-    try {
-      const data = await DocumentService.processDocument(type, cachedFile);
-      setDocuments(prev => ({
-        ...prev,
-        [type]: { 
-          ...prev[type],
-          data: data, 
-          loading: false, 
-          error: null, 
-          uploaded: true 
-        }
-      }));
-      return data;
-    } catch (err) {
-      setDocuments(prev => ({
-        ...prev,
-        [type]: { 
-          ...prev[type], 
-          loading: false, 
-          error: err instanceof Error ? err.message : "Network error, please try again" 
-        }
-      }));
-      throw err;
-    }
+
+
+
+
+  // Validate all extracted documents (local business rules)
+  const validateDocuments = () => {
+    // This will trigger re-rendering of BusinessRulesValidation component
+    // which automatically validates all uploaded documents
+    // No additional logic needed here as validation is reactive
+    console.log('Validation triggered for all extracted documents');
   };
 
-  // Clear all data for a single document
-  const clearDocument = (type: DocumentType) => {
-    setDocuments(prev => ({
-      ...prev,
-      [type]: { 
-        data: null, 
-        loading: false, 
-        error: null, 
-        uploaded: false, 
-        cached: false, 
-        cachedFile: null 
-      }
-    }));
-  };
-
-  // Batch process all cached documents
-  const handleProcessAllDocuments = async () => {
-    const cachedDocuments = Object.entries(documents).filter(([, state]) => state.cached && state.cachedFile);
+  // Process all documents (extract + validate)
+  const processDocuments = async () => {
+    // Find documents that need extraction: cached but not extracted yet
+    const pendingDocuments = Object.entries(documents).filter(
+      ([, state]) => state.cached && !state.uploaded && state.cachedFile
+    );
     
-    if (cachedDocuments.length === 0) {
+    if (pendingDocuments.length === 0) {
+      // No pending documents, just trigger validation
+      validateDocuments();
       return;
     }
 
     setIsProcessing(true);
 
     try {
-      // Process each document in sequence
-      for (const [type, state] of cachedDocuments) {
+      // Process each pending document in sequence
+      for (const [type, state] of pendingDocuments) {
         if (state.cachedFile) {
           setProcessingStep(type as DocumentType);
           await processDocument(type as DocumentType);
@@ -167,11 +131,12 @@ export function useDocumentProcessing() {
         }
       }
 
-      // All documents processed
+      // All documents processed, trigger validation
       setProcessingStep(null);
+      validateDocuments();
 
     } catch (error) {
-      console.error("Batch processing error:", error);
+      console.error("Document processing error:", error);
     } finally {
       setIsProcessing(false);
       setProcessingStep(null);
@@ -183,9 +148,6 @@ export function useDocumentProcessing() {
     isProcessing,
     processingStep,
     handleFileUpload,
-    handleProcessAllDocuments,
-    processDocument,
-    reprocessDocument,
-    clearDocument
+    processDocuments
   };
 } 
