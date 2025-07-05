@@ -30,62 +30,110 @@ export interface AutoPlusData extends BaseDocumentData {
   }> | null;
 }
 
-// Quote数据类型
-export interface QuoteData extends BaseDocumentData {
-  // 驾照相关信息
-  gender: string | null;
-  licence_class: string | null;
-  date_g: string | null;
-  date_g2: string | null;
-  date_g1: string | null;
-  date_insured: string | null;
-  date_with_company: string | null;
+// Quote多车辆多驾驶员数据类型
+export interface QuoteData {
+  vehicles: Array<{
+    vehicle_id: string; // 车辆序号
+    vehicle_type: string | null;
+    vin: string | null;
+    vehicle_year: string | null;
+    vehicle_make: string | null;
+    vehicle_model: string | null;
+    garaging_location: string | null;
+    leased: boolean | null;
+    annual_km: string | null;
+    business_km: string | null;
+    daily_km: string | null;
+    purchase_condition: string | null;
+    purchase_date: string | null;
+    km_at_purchase: string | null;
+    list_price_new: string | null;
+    purchase_price: string | null;
+    winter_tires: boolean | null;
+    parking_at_night: string | null;
+    anti_theft: {
+      device_type: string | null;
+      manufacturer: string | null;
+      engraving: string | null;
+    } | null;
+    drivers: Array<{
+      name: string;
+      role: 'prn' | 'occ';
+      birth_date: string | null;
+      marital_status: string | null;
+      gender: string | null;
+      relationship_to_applicant: string | null;
+      licence_number: string | null;
+      licence_province: string | null;
+      occupation: string | null;
+      licence_class: string | null;
+      date_g: string | null;
+      date_g2: string | null;
+      date_g1: string | null;
+      date_insured: string | null;
+      current_carrier: string | null;
+      date_with_company: string | null;
+      claims: Array<{
+        description: string;
+        date: string;
+        at_fault: boolean;
+        vehicle_involved: string;
+        tp_bi: string | null;
+        tp_pd: string | null;
+        ab: string | null;
+        coll: string | null;
+        other_pd: string | null;
+        vehicle_mismatch?: boolean;
+      }>;
+      lapses: Array<{
+        description: string;
+        date: string;
+        duration_months: number;
+        re_instate_date: string;
+      }>;
+      convictions: Array<{
+        description: string;
+        date: string;
+        kmh: string | null;
+        severity: string | null;
+      }>;
+    }>;
+    coverages: Array<{
+      type: string;
+      amount: string;
+      premium: string;
+    }>;
+  }>;
+  driver_limit_notice?: string;
   
-  // 车辆信息
-  vin: string | null;
-  vehicle_year: string | null;
-  vehicle_make: string | null;
-  vehicle_model: string | null;
-  garaging_location: string | null;
-  leased: boolean | null;
-  
-  // 里程和通勤信息
-  annual_mileage: string | null; // 年度驾驶里程
-  commute_distance: string | null; // 通勤距离
-  
-  // 客户联系信息
-  customer_contact_info: {
+  // 向后兼容字段 - 从第一个驾驶员/车辆提取
+  name?: string | null;
+  licence_number?: string | null;
+  date_of_birth?: string | null;
+  address?: string | null;
+  gender?: string | null;
+  licence_class?: string | null;
+  date_g?: string | null;
+  date_g2?: string | null;
+  date_g1?: string | null;
+  date_insured?: string | null;
+  date_with_company?: string | null;
+  vin?: string | null;
+  vehicle_year?: string | null;
+  vehicle_make?: string | null;
+  vehicle_model?: string | null;
+  garaging_location?: string | null;
+  leased?: boolean | null;
+  annual_mileage?: string | null;
+  commute_distance?: string | null;
+  customer_contact_info?: {
     full_address: string | null;
     email: string | null;
     phone: string | null;
   } | null;
-  
-  // 理赔记录
-  claims: Array<{
-    description: string;
-    date: string;
-    at_fault: boolean;
-    vehicle_involved: string;
-    tp_pd: string | null;
-    ab: string | null;
-    coll: string | null;
-    other_pd: string | null;
-  }> | null;
-  
-  // 违规记录
-  convictions: Array<{
-    description: string;
-    date: string;
-    severity: string;
-  }> | null;
-  
-  // 保险中断记录
-  lapses: Array<{
-    description: string;
-    start_date: string;
-    end_date: string;
-    duration_months: number;
-  }> | null;
+  claims?: Array<any>;
+  convictions?: Array<any>;
+  lapses?: Array<any>;
 }
 
 // Application数据类型 - 根据Ontario汽车保险申请表提取规则定义

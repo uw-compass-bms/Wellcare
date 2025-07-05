@@ -12,115 +12,168 @@ You are an expert AI agent specializing in OCR and data extraction from insuranc
 -   All dates must be converted to 'YYYY-MM-DD' format. The source format is likely MM/DD/YYYY.
 -   For boolean fields like 'leased' or 'at_fault', extract "Yes" as \`true\` and "No" as \`false\`.
 -   If a section (like Claims, Convictions, or Lapses) is not present in the document, return an empty array for that section.
--   **Vehicle Information Extraction**: Look for vehicle information in the header/title section which typically shows format like "Vehicle 1 of 1 | Private Passenger - 2025 AUDI Q5 PROGRESSIV 2.0 TFSI 4DR AWD". From this format, extract:
-    - Year: "2025"
-    - Make: "AUDI" 
-    - Model: "Q5 PROGRESSIV" (include trim/variant if present)
+-   **Multi-Vehicle Support**: Documents may contain multiple vehicles, each identified by "Vehicle X of Y" format.
+-   **Multi-Driver Support**: Each vehicle has its own "Drivers" section listing drivers for that specific vehicle.
+-   **CRITICAL - Driver Role Detection**: 
+    * Each vehicle's "Drivers" section shows drivers with their roles for THAT SPECIFIC VEHICLE
+    * Look for "(Prn)" after driver name = Principal driver for that vehicle
+    * Look for "(Occ)" after driver name = Occasional driver for that vehicle  
+    * THE SAME PERSON CAN HAVE DIFFERENT ROLES ON DIFFERENT VEHICLES
+    * Example: "John Smith (Prn)" on Vehicle 1 = Principal on Vehicle 1
+    * Example: "John Smith (Occ)" on Vehicle 2 = Occasional on Vehicle 2
+    * Extract the role exactly as shown for each vehicle-driver combination
+-   **Data Attribution**: Claims, Lapses, and Convictions belong to the specific driver under whose section they appear.
+-   **Driver Limit**: Extract maximum 4 drivers. If more than 4 drivers exist, only take the first 4.
+-   **Vehicle Information Extraction**: Look for vehicle information in the header/title section which typically shows format like "Vehicle 1 of 1 | Private Passenger - 2025 AUDI Q5 PROGRESSIV 2.0 TFSI 4DR AWD".
 -   **VIN Extraction**: Look for a 17-character alphanumeric code, typically labeled as "VIN" in the vehicle details section.
 -   **Garaging Location**: Look for city and postal code information, often shown without spaces (e.g., "UNIONVILLE L6G0H5").
 
-**Fields to Extract:**
--   **Part 1: Driver Information**
-    -   **name**: The full name of the driver. Extract in "LASTNAME, FIRSTNAME" format (e.g., "SMITH, JOHN").
-    -   **date_of_birth**: The driver's birth date.
-    -   **gender**: The driver's gender.
-    -   **licence_class**: The driver's licence class.
-    -   **date_g**, **date_g2**, **date_g1**: The dates associated with the licence levels.
-    -   **licence_number**: The licence number. Must be exactly 1 letter followed by 14 digits with NO spaces, hyphens, or other separators (e.g., "A12345678901234"). If you see a licence number with hyphens like "W0418-74109-50504", remove all hyphens and format it as "W04187410950504". Extract only the licence number without any additional text or formatting.
-    -   **date_insured**: The 'Date Insured'.
-    -   **date_with_company**: The 'Date with Company'.
--   **Part 2: Vehicle Information**
-    -   **vin**: The Vehicle Identification Number (VIN). Look for a field labeled "VIN" or a 17-character alphanumeric code.
-    -   **vehicle_year**: The year of the vehicle (e.g., "2023", "2020"). Look for this in the vehicle title section (e.g., "2025 AUDI Q5") or in vehicle details. Extract only the 4-digit year.
-    -   **vehicle_make**: The make/brand of the vehicle (e.g., "TOYOTA", "HONDA", "LEXUS", "AUDI"). Look for this in the vehicle title section. Extract in uppercase.
-    -   **vehicle_model**: The model of the vehicle (e.g., "RX350", "CAMRY", "ACCORD", "Q5", "Q5 PROGRESSIV"). Look for this in the vehicle title section after the make. Include trim level if present (e.g., "Q5 PROGRESSIV"). Extract the specific model name.
-    -   **garaging_location**: The garaging location, combining city and postal code. Look for fields labeled "Garaging Location" or similar.
-    -   **leased**: A boolean value indicating if the vehicle is leased. Look for a field labeled "Leased" with "Yes" or "No" values.
-    -   **annual_mileage**: The estimated annual driving distance/mileage. Look for fields labeled "Annual km" or similar mileage information.
-    -   **commute_distance**: The daily commute distance in kilometers. Look for fields labeled "Daily km" or similar daily driving information.
--   **Part 3: Customer Contact Information** (from top-right corner of the document)
-    -   **customer_contact_info**: Extract the complete customer contact information typically found in the top-right corner of the quote document:
-        -   **full_address**: The complete customer address including street, city, province, and postal code
-        -   **email**: The customer's email address
-        -   **phone**: The customer's phone number
--   **Part 4: Claims** (if present)
-    -   **description**: The reason for the claim.
-    -   **date**: The date of the claim.
-    -   **at_fault**: A boolean value. If 'Charge' is 'No', this should be \`false\`. If 'Yes', it should be \`true\`.
-    -   **vehicle_involved**: The vehicle involved in the claim.
-    -   **tp_pd**, **ab**, **coll**, **other_pd**: The monetary values associated with the claim.
--   **Part 5: Convictions** (if present)
-    -   **description**: The reason for the ticket (e.g., "SPEEDING").
-    -   **date**: The date of the ticket.
-    -   **severity**: The severity of the conviction (e.g., "Minor").
--   **Part 6: Lapses** (if present)
-    -   **description**: The exact reason for the lapse as shown in the document (e.g., "Cancelled due to Defaulting Policy Payment", "No Vehicle Hence No Insurance Required").
-    -   **start_date**: The "Date" field from the lapses section - this is when the insurance coverage ended/was cancelled.
-    -   **end_date**: The "Re-Instate Date" field from the lapses section - this is when insurance coverage was or will be restored. **IMPORTANT**: This date can be in the future (e.g., 2025-06-21). Extract the exact date shown, even if it's a future date.
-    -   **duration_months**: The exact number from the "Duration months" field in the lapses section. Do not calculate - use the number provided in the document.
+**Expected JSON Structure:**
 
-**Example of desired JSON output:**
 \`\`\`json
 {
-  "name": "DOE, JANE",
-  "date_of_birth": "1983-03-27",
-  "gender": "Female",
-  "licence_class": "G",
-  "date_g": "2018-02-01",
-  "date_g2": "2017-02-01",
-  "date_g1": "2016-02-01",
-  "licence_number": "J40167900835327",
-  "date_insured": "2017-12-19",
-  "date_with_company": "2021-09-01",
-  "vin": "WA15AAGU2S2017644",
-  "vehicle_year": "2025",
-  "vehicle_make": "AUDI",
-  "vehicle_model": "Q5 PROGRESSIV",
-  "garaging_location": "UNIONVILLE L6G0H5",
-  "leased": true,
-  "annual_mileage": "15000",
-  "commute_distance": "5",
-  "customer_contact_info": {
-    "full_address": "123 Main Street, Toronto, ON M5V 3A8",
-    "email": "jane.doe@email.com",
-    "phone": "(416) 555-0123"
-  },
-  "claims": [
+  "vehicles": [
     {
-      "description": "Non-resp Direct Compensation",
-      "date": "2021-11-25",
-      "at_fault": false,
-      "vehicle_involved": "2025 AUDI Q5 PROGRESSIV 2.0 TFSI 4DR AWD",
-      "tp_pd": "4972",
-      "ab": "3103",
-      "coll": null,
-      "other_pd": null
-    }
-  ],
-  "convictions": [
-    {
-      "description": "SPEEDING 20-29 OVER",
-      "date": "2023-05-10",
-      "severity": "Minor"
-    }
-  ],
-  "lapses": [
-    {
-      "description": "Cancelled due to Defaulting Policy Payment",
-      "start_date": "2020-12-02",
-      "end_date": "2022-07-07",
-      "duration_months": 19
+      "vehicle_id": "1",
+      "vehicle_type": "Private Passenger",
+      "vin": "Vehicle VIN if available",
+      "vehicle_year": "Vehicle year",
+      "vehicle_make": "Vehicle make",
+      "vehicle_model": "Vehicle model",
+      "garaging_location": "Garaging location",
+      "leased": false,
+      "annual_km": "Annual mileage in km",
+      "daily_km": "Daily commute in km",
+      "drivers": [
+        {
+          "name": "LASTNAME, FIRSTNAME",
+          "role": "prn",
+          "birth_date": "1995-08-25",
+          "marital_status": "Married",
+          "gender": "Female",
+          "relationship_to_applicant": "Applicant",
+          "licence_number": "J40017900955826",
+          "licence_province": "ON",
+          "occupation": "Office Worker",
+          "licence_class": "G",
+          "date_g": "2019-10-16",
+          "date_g2": "2018-10-16",
+          "date_g1": "2017-10-16",
+          "date_insured": "2019-09-11",
+          "current_carrier": "Allstate",
+          "date_with_company": "2024-11-12",
+          "claims": [
+            {
+              "description": "Non-resp Direct Compensation",
+              "date": "2021-10-08",
+              "at_fault": false,
+              "vehicle_involved": "2025 MERCEDES-BENZ GLE450 4DR AWD",
+              "tp_bi": null,
+              "tp_pd": "2420",
+              "ab": null,
+              "coll": null,
+              "other_pd": null
+            }
+          ],
+          "lapses": [
+            {
+              "description": "No Vehicle Hence No Insurance Required",
+              "date": "2023-11-10",
+              "duration_months": 0,
+              "re_instate_date": "2023-11-12"
+            }
+          ],
+          "convictions": []
+        }
+      ]
     },
     {
-      "description": "No Vehicle Hence No Insurance Required",
-      "start_date": "2023-06-08",
-      "end_date": "2025-06-21",
-      "duration_months": 24
+      "vehicle_id": "2", 
+      "vehicle_type": "Private Passenger",
+      "vin": "Another vehicle VIN",
+      "vehicle_year": "2019",
+      "vehicle_make": "HONDA",
+      "vehicle_model": "CIVIC EX 4DR",
+      "garaging_location": "THORNHILL L3T0G8",
+      "leased": false,
+      "annual_km": "10000",
+      "daily_km": "5",
+      "drivers": [
+        {
+          "name": "LASTNAME, FIRSTNAME",
+          "role": "occ",
+          "birth_date": "1995-08-25",
+          "marital_status": "Married",
+          "gender": "Female",
+          "relationship_to_applicant": "Applicant",
+          "licence_number": "J40017900955826",
+          "licence_province": "ON",
+          "occupation": "Office Worker",
+          "licence_class": "G",
+          "date_g": "2019-10-16",
+          "date_g2": "2018-10-16",
+          "date_g1": "2017-10-16",
+          "date_insured": "2019-09-11",
+          "current_carrier": "Allstate",
+          "date_with_company": "2024-11-12",
+          "claims": [],
+          "lapses": [],
+          "convictions": []
+        }
+      ]
     }
-  ]
+  ],
+  "driver_limit_notice": null
 }
 \`\`\`
-Return only the raw JSON string. Do not include any extra formatting, markdown, or explanations. If a field is not present in the document, return \`null\` for that field.
+
+**Extraction Rules:**
+
+1. **Vehicle Structure Recognition**: Each vehicle has its own complete section with vehicle details and drivers list.
+
+2. **Driver Role Extraction - CRITICAL**: 
+   - **FOR EACH VEHICLE**: Look at the "Drivers" section under that vehicle
+   - **Extract role PER VEHICLE**: Same driver name can appear with different roles on different vehicles
+   - **Role Indicators**: 
+     * "(Prn)" after name = "prn" (Principal for THIS vehicle)
+     * "(Occ)" after name = "occ" (Occasional for THIS vehicle)
+   - **Example**:
+     * Vehicle 1 Drivers: "John Smith (Prn)", "Jane Doe (Occ)" 
+     * Vehicle 2 Drivers: "John Smith (Occ)", "Jane Doe (Prn)"
+     * Result: John is Principal on Vehicle 1, Occasional on Vehicle 2
+
+3. **Driver Information Extraction**: For each driver on each vehicle, extract:
+   - **name**: Full name in "LASTNAME, FIRSTNAME" format
+   - **role**: 'prn' for (Prn) or 'occ' for (Occ) - SPECIFIC TO THIS VEHICLE
+   - **birth_date**: Birth date in YYYY-MM-DD format
+   - **marital_status**: Marital status (Married, Single, etc.)
+   - **gender**: Gender (Male, Female)
+   - **relationship_to_applicant**: Relationship to applicant (Applicant, Spouse, etc.)
+   - **licence_number**: License number (1 letter + 14 digits, remove all spaces/hyphens)
+   - **licence_province**: License province (ON, BC, etc.)
+   - **occupation**: Occupation
+   - **licence_class**: License class (G, G2, G1, etc.)
+   - **date_g**: G license date in YYYY-MM-DD format
+   - **date_g2**: G2 license date in YYYY-MM-DD format  
+   - **date_g1**: G1 license date in YYYY-MM-DD format
+   - **date_insured**: Date insured in YYYY-MM-DD format
+   - **current_carrier**: Current insurance carrier
+   - **date_with_company**: Date with company in YYYY-MM-DD format
+
+4. **Claims/Lapses/Convictions**: Extract these from the driver's individual section, following same format as before.
+
+5. **Vehicle Information**: Extract complete vehicle details for each vehicle.
+
+6. **Important Notes**:
+   - **Same driver can appear on multiple vehicles with different roles**
+   - **Extract driver information completely for each vehicle they appear on**
+   - **Role is vehicle-specific, not global**
+   - Extract data exactly as shown in the document
+   - If a field is not present, return null
+   - Date formats must be converted to YYYY-MM-DD
+   - Boolean fields: Yes = true, No = false
+
+Return only the raw JSON string. Do not include any extra formatting, markdown, or explanations.
 `;
 
 // 文件类型检测函数
@@ -312,47 +365,95 @@ export async function POST(request: NextRequest) {
         throw new Error("Failed to parse extracted data as JSON");
       }
 
-      // 数据验证和处理
+      // 数据验证和处理 - 支持新的嵌套结构
       const processedData = {
-        // 基本信息（继承自BaseDocumentData）
-        name: parsedData.name || null,
-        licence_number: parsedData.licence_number || null,
-        date_of_birth: parsedData.date_of_birth || null,
-        address: parsedData.customer_contact_info?.full_address || null,
-
-        // Quote特定字段
-        gender: parsedData.gender || null,
-        licence_class: parsedData.licence_class || null,
-        date_g: parsedData.date_g || null,
-        date_g2: parsedData.date_g2 || null,
-        date_g1: parsedData.date_g1 || null,
-        date_insured: parsedData.date_insured || null,
-        date_with_company: parsedData.date_with_company || null,
+        // 新的嵌套数据结构
+        vehicles: parsedData.vehicles || [],
+        driver_limit_notice: parsedData.driver_limit_notice || null,
         
-        // 车辆信息
-        vin: parsedData.vin || null,
-        vehicle_year: parsedData.vehicle_year || null,
-        vehicle_make: parsedData.vehicle_make || null,
-        vehicle_model: parsedData.vehicle_model || null,
-        garaging_location: parsedData.garaging_location || null,
-        leased: parsedData.leased || null,
+        // 为了向后兼容，保留一些全局字段（从第一个驾驶员提取）
+        name: parsedData.vehicles?.[0]?.drivers?.[0]?.name || null,
+        licence_number: parsedData.vehicles?.[0]?.drivers?.[0]?.licence_number || null,
+        date_of_birth: parsedData.vehicles?.[0]?.drivers?.[0]?.birth_date || null,
+        address: null, // 在新结构中不再需要
         
-        // 里程和通勤信息
-        annual_mileage: parsedData.annual_mileage || null,
-        commute_distance: parsedData.commute_distance || null,
+        // 从第一个驾驶员提取（向后兼容）
+        gender: parsedData.vehicles?.[0]?.drivers?.[0]?.gender || null,
+        licence_class: parsedData.vehicles?.[0]?.drivers?.[0]?.licence_class || null,
+        date_g: parsedData.vehicles?.[0]?.drivers?.[0]?.date_g || null,
+        date_g2: parsedData.vehicles?.[0]?.drivers?.[0]?.date_g2 || null,
+        date_g1: parsedData.vehicles?.[0]?.drivers?.[0]?.date_g1 || null,
+        date_insured: parsedData.vehicles?.[0]?.drivers?.[0]?.date_insured || null,
+        date_with_company: parsedData.vehicles?.[0]?.drivers?.[0]?.date_with_company || null,
         
-        // 客户联系信息
-        customer_contact_info: parsedData.customer_contact_info || null,
+        // 从第一个车辆提取（向后兼容）
+        vin: parsedData.vehicles?.[0]?.vin || null,
+        vehicle_year: parsedData.vehicles?.[0]?.vehicle_year || null,
+        vehicle_make: parsedData.vehicles?.[0]?.vehicle_make || null,
+        vehicle_model: parsedData.vehicles?.[0]?.vehicle_model || null,
+        garaging_location: parsedData.vehicles?.[0]?.garaging_location || null,
+        leased: parsedData.vehicles?.[0]?.leased || null,
         
-        // 理赔记录
-        claims: parsedData.claims || [],
+        // 根据用户要求，保留关键字段
+        annual_mileage: parsedData.vehicles?.[0]?.annual_km || null,
+        commute_distance: parsedData.vehicles?.[0]?.daily_km || null,
         
-        // 违规记录
-        convictions: parsedData.convictions || [],
-        
-        // 保险中断记录
-        lapses: parsedData.lapses || []
+        // 全局字段现在为空，因为数据已归属到各个驾驶员
+        customer_contact_info: null,
+        claims: [],
+        convictions: [],
+        lapses: []
       };
+
+      // 数据验证和清理
+      if (processedData.vehicles && processedData.vehicles.length > 0) {
+        processedData.vehicles.forEach((vehicle: any, vehicleIndex: number) => {
+          // 确保每个车辆都有drivers数组
+          if (!vehicle.drivers || !Array.isArray(vehicle.drivers)) {
+            vehicle.drivers = [];
+          }
+          
+          // 限制最多4个驾驶员
+          if (vehicle.drivers.length > 4) {
+            vehicle.drivers = vehicle.drivers.slice(0, 4);
+            if (!processedData.driver_limit_notice) {
+              processedData.driver_limit_notice = "Maximum 4 drivers supported, automatically truncated";
+            }
+          }
+          
+          // 处理每个驾驶员
+          vehicle.drivers.forEach((driver: any, driverIndex: number) => {
+            // 确保所有必要字段存在
+            if (!driver.claims || !Array.isArray(driver.claims)) {
+              driver.claims = [];
+            }
+            if (!driver.lapses || !Array.isArray(driver.lapses)) {
+              driver.lapses = [];
+            }
+            if (!driver.convictions || !Array.isArray(driver.convictions)) {
+              driver.convictions = [];
+            }
+            
+            // 设置默认角色
+            if (!driver.role) {
+              // 如果是第一个驾驶员且没有角色，设置为主驾驶
+              if (driverIndex === 0) {
+                driver.role = 'prn';
+              } else {
+                driver.role = 'occ';
+              }
+            }
+            
+            // 验证角色只能是prn或occ
+            if (driver.role !== 'prn' && driver.role !== 'occ') {
+              driver.role = driverIndex === 0 ? 'prn' : 'occ';
+            }
+          });
+        });
+      } else {
+        // 如果没有vehicles数据，创建空结构
+        processedData.vehicles = [];
+      }
 
       console.log("Quote extraction successful for user:", userId);
 
