@@ -1,89 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
-
-// 定义Application数据类型
-interface ApplicationData {
-  // 基本申请信息
-  name: string | null;
-  licence_number: string | null;
-  date_of_birth: string | null;
-  address: string | null;
-  phone: string | null;
-  lessor_info: string | null;
-  effective_date: string | null;
-  expiry_date: string | null;
-  
-  // 车辆信息
-  vehicle_year: string | null;
-  vehicle_make: string | null;
-  vehicle_model: string | null;
-  vin: string | null;
-  lienholder_info: string | null;
-  vehicle_ownership: 'lease' | 'owned' | null;
-  
-  // 使用信息
-  annual_mileage: string | null;
-  commute_distance: string | null;
-  automobile_use_details: string | null;
-  
-  // 驾驶员信息
-  drivers: Array<{
-    name: string;
-    licence_number: string;
-    date_of_birth: string;
-    gender: string | null;
-    marital_status: string | null;
-    first_licensed_date: string | null;
-  }> | null;
-  
-  // 保险保障信息
-  insurance_coverages: {
-    liability_amount: string | null;
-    loss_or_damage: {
-      comprehensive: {
-        covered: boolean;
-        deductible: string | null;
-      } | null;
-      collision: {
-        covered: boolean;
-        deductible: string | null;
-      } | null;
-      all_perils: {
-        covered: boolean;
-        deductible: string | null;
-        premium: string | null;
-      } | null;
-    } | null;
-  } | null;
-  
-  // 附加条款
-  policy_change_forms: {
-    loss_of_use: boolean | null;
-    liab_to_unowned_veh: boolean | null;
-    limited_waiver: boolean | null;
-    rent_or_lease: boolean | null;
-    accident_waiver: boolean | null;
-    minor_conviction_protection: boolean | null;
-  } | null;
-  
-  // 备注信息
-  remarks: string | null;
-  
-  // 支付信息
-  payment_info: {
-    annual_premium: string | null;
-    monthly_payment: string | null;
-    payment_type: 'annual' | 'monthly' | null;
-  } | null;
-  
-  // 签名确认
-  signatures: {
-    applicant_signed: boolean | null;
-    applicant_signature_date: string | null;
-    broker_signed: boolean | null;
-    broker_signature_date: string | null;
-  } | null;
-}
+import { ApplicationData } from '../../app/document-verification/types';
 
 // 文件类型检测和编码函数
 function b64dataIsPdf(b64data: string): boolean {
@@ -142,6 +59,7 @@ function getApplicationPrompt(): string {
 - 所有字段名必须使用snake_case格式
 - 所有日期必须转换为'YYYY-MM-DD'格式
 - 如果某个字段在文档中不存在，返回null
+- 支持多车辆多驾驶员提取
 
 **提取字段清单：**
 
@@ -157,62 +75,59 @@ function getApplicationPrompt(): string {
 - **effective_date**: 生效日期，格式YYYY-MM-DD
 - **expiry_date**: 到期日期，格式YYYY-MM-DD
 
-### 3. 车辆信息
-- **vehicle_year**: 车辆年份
-- **vehicle_make**: 车辆厂牌(Make)
-- **vehicle_model**: 车辆型号(Model)
-- **vin**: VIN号码，从"Vehicle Identification No."字段提取
-- **lienholder_info**: Lienholder Name & Postal Address下方的信息
-- **vehicle_ownership**: 判断是"lease"还是"owned"，通过Lienholder信息和相关标记判断
+### 3. 多车辆信息
+- **vehicles**: 车辆数组，每个车辆包含：
+  - **vehicle_id**: 车辆序号 (Auto 1, Auto 2, etc.)
+  - **vehicle_year**: 车辆年份
+  - **vehicle_make**: 车辆厂牌(Make)
+  - **vehicle_model**: 车辆型号(Model)
+  - **vin**: VIN号码，从"Vehicle Identification No."字段提取
+  - **lienholder_info**: Lienholder Name & Postal Address下方的信息
+  - **vehicle_ownership**: 判断是"lease"还是"owned"，通过Lienholder信息和相关标记判断
+  - **annual_mileage**: 年驾驶里程数
+  - **commute_distance**: 通勤单程距离(公里数)
+  - **automobile_use_details**: Automobile Use部分的详细信息
+  
+  - **coverages**: 从"Insurance Coverages Applied For"表格中提取每台车的保险保障信息
+    - **liability**: 
+      - **bodily_injury**: { amount: "保额", premium: "保费" }
+      - **property_damage**: { amount: "保额", premium: "保费" }
+    - **accident_benefits**:
+      - **standard**: { amount: "保额", premium: "保费" }
+      - **enhanced**: { 各种增强选项: true/false }
+    - **uninsured_automobile**: { covered: true/false, amount: "保额", premium: "保费" }
+    - **direct_compensation**: { covered: true/false, deductible: "垫底费", premium: "保费" }
+    - **loss_or_damage**:
+      - **comprehensive**: { covered: true/false, deductible: "垫底费", premium: "保费" }
+      - **collision**: { covered: true/false, deductible: "垫底费", premium: "保费" }
+      - **all_perils**: { covered: true/false, deductible: "垫底费", premium: "保费" }
+      - **specified_perils**: { covered: true/false, deductible: "垫底费", premium: "保费" }
+    - **policy_change_forms**:
+      - **family_protection**: { covered: true/false, deductible: "垫底费", premium: "保费" }
+    - **total_premium**: 每台车的保费合计
 
-### 4. 使用信息
-- **annual_mileage**: 年驾驶里程数
-- **commute_distance**: 通勤单程距离(公里数)
-- **automobile_use_details**: Automobile Use部分的详细信息
-
-### 5. 驾驶员信息
+### 4. 多驾驶员信息
 - **drivers**: 驾驶员数组，每个驾驶员包含：
   - **name**: 姓名
-  - **licence_number**: 驾照号码
+  - **licence_number**: 驾照号码  
   - **date_of_birth**: 出生日期，格式YYYY-MM-DD
   - **gender**: 性别
   - **marital_status**: 婚姻状态
   - **first_licensed_date**: 首次获得驾照日期，从"First Licensed in Canada or U.S."部分提取
 
-### 6. 保险保障信息
-- **insurance_coverages**:
-  - **liability_amount**: 第三者责任险金额（注意：1000表示100万）
-  - **loss_or_damage**: 损失或损害保障
-    - **comprehensive**: 如果有Deductible，设置covered=true，否则covered=false
-      - **covered**: 是否承保
-      - **deductible**: 免赔额，必须是百位整数(500, 1000, 2000, 5000等)，如果不是请四舍五入到最近的百位数
-    - **collision**: 如果有Deductible，设置covered=true，否则covered=false
-      - **covered**: 是否承保
-      - **deductible**: 免赔额，必须是百位整数(500, 1000, 2000, 5000等)，如果不是请四舍五入到最近的百位数
-    - **all_perils**: 如果有Deductible和Premium且Premium>0，设置covered=true，否则covered=false
-      - **covered**: 是否承保
-      - **deductible**: 免赔额
-      - **premium**: 保费
+### 5. 备注信息 - 重要！
+- **remarks**: 完整提取"Remarks - Use this space if you have further details"下方的所有内容
+  - **注意**: 这部分内容可能跨页，确保提取所有相关信息
+  - **包括**: 所有驾驶员的Graduated Licensing信息、邮箱、保险历史等所有内容
+  - **格式**: 使用\\n分隔不同行的内容
 
-### 7. 附加条款 (Policy Change Forms部分)
-- **policy_change_forms**:
-  - **loss_of_use**: #20 Loss of Use条款是否存在 (true/false)
-  - **liab_to_unowned_veh**: #27 Liab to Unowned Veh.条款是否存在 (true/false)
-  - **limited_waiver**: #43a Limited Waiver条款是否存在 (true/false)
-  - **rent_or_lease**: #5a Rent or Lease条款是否存在 (true/false)
-  - **accident_waiver**: Accident Waiver条款是否存在 (true/false)
-  - **minor_conviction_protection**: Minor Conviction Protection条款是否存在 (true/false)
-
-### 8. 备注信息
-- **remarks**: Remarks - Use this space if you have further details下方的所有内容
-
-### 9. 支付信息
+### 6. 支付信息
 - **payment_info**:
   - **annual_premium**: 年保费总额，从"Total Estimated Cost"提取
   - **monthly_payment**: 月供金额，从"Amount of Each Instalment"提取
   - **payment_type**: 根据支付方式设置为"annual"或"monthly"
 
-### 10. 签名确认
+### 7. 签名确认
 - **signatures**:
   - **applicant_signed**: 申请人是否有签名（true/false）
   - **applicant_signature_date**: 申请人签名日期，格式YYYY-MM-DD
@@ -221,66 +136,165 @@ function getApplicationPrompt(): string {
 
 **JSON输出格式示例：**
 {
-  "name": "SMITH, JOHN",
-  "licence_number": "S12345678901234",
-  "date_of_birth": "1990-05-15",
-  "address": "123-456 MAIN STREET\\nTORONTO, ON\\nM1A 2B3",
-  "phone": "416-123-4567",
+  "name": "PANG, XIAOCHUAN",
+  "licence_number": "J40017900955826",
+  "date_of_birth": "1995-08-26",
+  "address": "205-12 GANDHI LANE\\nTHORNHILL, ON\\nL3T 0G8",
+  "phone": "647-870-8267",
   "lessor_info": null,
-  "effective_date": "2024-03-01",
-  "expiry_date": "2025-03-01",
-  "vehicle_year": "2022",
-  "vehicle_make": "TOYOTA",
-  "vehicle_model": "CAMRY SE",
-  "vin": "1A2B3C4D5E6F7G8H9",
-  "lienholder_info": "Sample Leasing Company 456 Business Rd Toronto ON M2B 3C4",
-  "vehicle_ownership": "lease",
-  "annual_mileage": "15000",
-  "commute_distance": "10",
-  "automobile_use_details": null,
-  "drivers": [
+  "effective_date": "2025-03-20",
+  "expiry_date": "2026-03-20",
+  "vehicles": [
     {
-      "name": "John Smith",
-      "licence_number": "S12345678901234",
-      "date_of_birth": "1990-05-15",
-      "gender": "M",
-      "marital_status": "M",
-      "first_licensed_date": "2008-06-01"
-    }
-  ],
-      "insurance_coverages": {
-      "liability_amount": "1000000",
-      "loss_or_damage": {
-        "comprehensive": {
-          "covered": true,
-          "deductible": "500"
+      "vehicle_id": "Auto 1",
+      "vehicle_year": "2025",
+      "vehicle_make": "MERCEDES-BENZ",
+      "vehicle_model": "GLE450 4DR AWD",
+      "vin": "4JGFB8FB5KA123456",
+      "lienholder_info": "Mercedes-Benz Financial Servic 2580 Matheson Blvd East Suite 500 Mississauga ON L4W 0A5",
+      "vehicle_ownership": "lease",
+      "annual_mileage": "10000",
+      "commute_distance": "5",
+      "automobile_use_details": null,
+      "coverages": {
+        "liability": {
+          "bodily_injury": {
+            "amount": "2000000",
+            "premium": "491"
+          },
+          "property_damage": {
+            "amount": "2000000",
+            "premium": "77"
+          }
         },
-        "collision": {
-          "covered": true,
-          "deductible": "500"
+        "accident_benefits": {
+          "standard": {
+            "amount": "590",
+            "premium": "590"
+          },
+          "enhanced": null
         },
-        "all_perils": null
+        "uninsured_automobile": {
+          "covered": true,
+          "amount": "27",
+          "premium": "27"
+        },
+        "direct_compensation": {
+          "covered": true,
+          "deductible": "0",
+          "premium": "1507"
+        },
+        "loss_or_damage": {
+          "comprehensive": {
+            "covered": true,
+            "deductible": "2500",
+            "premium": "655"
+          },
+          "collision": {
+            "covered": true,
+            "deductible": "2500",
+            "premium": "1746"
+          },
+          "all_perils": null,
+          "specified_perils": null
+        },
+        "policy_change_forms": {
+          "family_protection": {
+            "covered": true,
+            "deductible": "15",
+            "premium": "15"
+          }
+        },
+        "total_premium": "5093"
       }
     },
-    "policy_change_forms": {
-      "loss_of_use": true,
-      "liab_to_unowned_veh": true,
-      "limited_waiver": false,
-      "rent_or_lease": false,
-      "accident_waiver": false,
-      "minor_conviction_protection": true
+    {
+      "vehicle_id": "Auto 2",
+      "vehicle_year": "2019",
+      "vehicle_make": "HONDA",
+      "vehicle_model": "CIVIC EX 4DR",
+      "vin": "19XFC2F75KE987654",
+      "lienholder_info": null,
+      "vehicle_ownership": "owned",
+      "annual_mileage": "10000",
+      "commute_distance": "5",
+      "automobile_use_details": null,
+      "coverages": {
+        "liability": {
+          "bodily_injury": {
+            "amount": "2000000",
+            "premium": "407"
+          },
+          "property_damage": {
+            "amount": "2000000",
+            "premium": "45"
+          }
+        },
+        "accident_benefits": {
+          "standard": {
+            "amount": "1033",
+            "premium": "1033"
+          },
+          "enhanced": null
+        },
+        "uninsured_automobile": {
+          "covered": true,
+          "amount": "47",
+          "premium": "47"
+        },
+        "direct_compensation": {
+          "covered": true,
+          "deductible": "0",
+          "premium": "665"
+        },
+        "loss_or_damage": {
+          "comprehensive": {
+            "covered": true,
+            "deductible": "2500",
+            "premium": "129"
+          },
+          "collision": {
+            "covered": true,
+            "deductible": "2500",
+            "premium": "987"
+          },
+          "all_perils": null,
+          "specified_perils": null
+        },
+        "policy_change_forms": null,
+        "total_premium": "3628"
+      }
+    }
+  ],
+  "drivers": [
+    {
+      "name": "Youyue Ji",
+      "licence_number": "J40017900955826",
+      "date_of_birth": "1995-08-26",
+      "gender": "F",
+      "marital_status": "M",
+      "first_licensed_date": "2017-10-01"
     },
-  "remarks": "Applicant Email - example@email.com\\nDrv. No. 1 - Graduated Licensing - G - 2010/06/15\\nDrv. No. 1 - Graduated Licensing - G1 - 2008/06/01\\nDrv. No. 1 - Graduated Licensing - G2 - 2009/08/15\\nGeneral - STANDARD COVERAGE\\nCOMMUTE TO OFFICE DAILY\\nMULTI-POLICY DISCOUNT\\nDeductible collision $500 & comp $500\\nPayment Plan - Annual",
+    {
+      "name": "Xiaochuan Pang",
+      "licence_number": "P04187890440206",
+      "date_of_birth": "1994-02-06",
+      "gender": "M",
+      "marital_status": "M",
+      "first_licensed_date": "2016-01-01"
+    }
+  ],
+  "remarks": "Applicant Email - youyueyue@gmail.com\\nDrv. No. 1 - Graduated Licensing - G - 2017/10/16\\nDrv. No. 1 - Graduated Licensing - G1 - 2017/10/16\\nDrv. No. 1 - Graduated Licensing - G2 - 2018/10/16\\nDrv. No. 2 - Graduated Licensing - G - 2016/01/04\\nDrv. No. 2 - Graduated Licensing - G1 - 2016/01/04\\nDrv. No. 2 - Graduated Licensing - G2 - 2017/01/04\\nGeneral - OPCF 43 declined (Waiver of Depreciation). No compensation for depreciation in case of total loss.\\nOPCF 20 declined (Loss of Use). No coverage for rental car expenses if vehicle is unavailable due to accident.",
   "payment_info": {
-    "annual_premium": "2850.00",
+    "annual_premium": "8721.00",
     "monthly_payment": null,
     "payment_type": "annual"
   },
   "signatures": {
     "applicant_signed": true,
-    "applicant_signature_date": "2024-02-15",
+    "applicant_signature_date": "2024-01-01",
     "broker_signed": true,
-    "broker_signature_date": "2024-02-15"
+    "broker_signature_date": "2024-01-01"
   }
 }
 
@@ -288,7 +302,8 @@ function getApplicationPrompt(): string {
 }
 
 // JSON解析函数
-function parseAIResponse(data: string): ApplicationData | null {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function parseAIResponse(data: string): any {
   console.log("parseAIResponse", data);
   try {
     if (typeof data === "string") {
@@ -422,9 +437,68 @@ export async function POST(request: NextRequest) {
       throw new Error('Failed to parse AI response as JSON');
     }
     
+    // 数据处理和向后兼容
+    const processedData: ApplicationData = {
+      // 新的嵌套数据结构
+      vehicles: result.vehicles || [],
+      drivers: result.drivers || [],
+      remarks: result.remarks || null,
+      phone: result.phone || null,
+      lessor_info: result.lessor_info || null,
+      effective_date: result.effective_date || null,
+      expiry_date: result.expiry_date || null,
+      payment_info: result.payment_info || null,
+      signatures: result.signatures || null,
+      
+      // 从第一个车辆提取的向后兼容字段
+      name: result.name || null,
+      licence_number: result.licence_number || null,
+      date_of_birth: result.date_of_birth || null,
+      address: result.address || null,
+      vehicle_year: result.vehicles?.[0]?.vehicle_year || null,
+      vehicle_make: result.vehicles?.[0]?.vehicle_make || null,
+      vehicle_model: result.vehicles?.[0]?.vehicle_model || null,
+      vin: result.vehicles?.[0]?.vin || null,
+      lienholder_info: result.vehicles?.[0]?.lienholder_info || null,
+      vehicle_ownership: result.vehicles?.[0]?.vehicle_ownership || null,
+      annual_mileage: result.vehicles?.[0]?.annual_mileage || null,
+      commute_distance: result.vehicles?.[0]?.commute_distance || null,
+      automobile_use_details: result.vehicles?.[0]?.automobile_use_details || null,
+      
+      // 向后兼容的旧结构保险保障信息
+      insurance_coverages: result.vehicles?.[0]?.coverages ? {
+        liability_amount: result.vehicles[0].coverages.liability?.bodily_injury?.amount || null,
+        loss_or_damage: {
+          comprehensive: result.vehicles[0].coverages.loss_or_damage?.comprehensive ? {
+            covered: result.vehicles[0].coverages.loss_or_damage.comprehensive.covered,
+            deductible: result.vehicles[0].coverages.loss_or_damage.comprehensive.deductible
+          } : null,
+          collision: result.vehicles[0].coverages.loss_or_damage?.collision ? {
+            covered: result.vehicles[0].coverages.loss_or_damage.collision.covered,
+            deductible: result.vehicles[0].coverages.loss_or_damage.collision.deductible
+          } : null,
+          all_perils: result.vehicles[0].coverages.loss_or_damage?.all_perils ? {
+            covered: result.vehicles[0].coverages.loss_or_damage.all_perils.covered,
+            deductible: result.vehicles[0].coverages.loss_or_damage.all_perils.deductible,
+            premium: result.vehicles[0].coverages.loss_or_damage.all_perils.premium
+          } : null
+        }
+      } : null,
+      
+      // 向后兼容的旧结构附加条款
+      policy_change_forms: result.vehicles?.[0]?.coverages?.policy_change_forms ? {
+        loss_of_use: false, // 根据需要设置
+        liab_to_unowned_veh: false, // 根据需要设置
+        limited_waiver: false, // 根据需要设置
+        rent_or_lease: false, // 根据需要设置
+        accident_waiver: false, // 根据需要设置
+        minor_conviction_protection: false // 根据需要设置
+      } : null
+    };
+    
     return NextResponse.json({ 
       success: true, 
-      data: result,
+      data: processedData,
       metadata: {
         file_name: fileName,
         file_size: fileSize,

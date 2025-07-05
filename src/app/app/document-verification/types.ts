@@ -215,20 +215,104 @@ export interface ApplicationData extends BaseDocumentData {
   effective_date: string | null;
   expiry_date: string | null;
   
-  // 车辆信息
-  vehicle_year: string | null;
-  vehicle_make: string | null;
-  vehicle_model: string | null;
-  vin: string | null;
-  lienholder_info: string | null;
-  vehicle_ownership: 'lease' | 'owned' | null; // 判断是lease还是owned
+  // 多车辆信息
+  vehicles: Array<{
+    vehicle_id: string; // 车辆序号
+    vehicle_year: string | null;
+    vehicle_make: string | null;
+    vehicle_model: string | null;
+    vin: string | null;
+    lienholder_info: string | null;
+    vehicle_ownership: 'lease' | 'owned' | null; // 判断是lease还是owned
+    annual_mileage: string | null;
+    commute_distance: string | null; // 通勤单程距离
+    automobile_use_details: string | null;
+    
+    // 每台车的保险保障信息 - 从"Insurance Coverages Applied For"表格提取
+    coverages: {
+      // 基础责任险
+      liability: {
+        bodily_injury: {
+          amount: string | null; // 保额
+          premium: string | null; // 保费
+        } | null;
+        property_damage: {
+          amount: string | null; // 保额  
+          premium: string | null; // 保费
+        } | null;
+      } | null;
+      
+      // 意外福利
+      accident_benefits: {
+        standard: {
+          amount: string | null; // 保额
+          premium: string | null; // 保费
+        } | null;
+        enhanced: {
+          income_replacement: boolean | null;
+          medical_care: boolean | null;
+          catastrophic_impairment: boolean | null;
+          caregiver_maintenance: boolean | null;
+          death_funeral: boolean | null;
+          dependant_care: boolean | null;
+          indexation_benefit: boolean | null;
+        } | null;
+      } | null;
+      
+      // 未保险汽车
+      uninsured_automobile: {
+        covered: boolean;
+        amount: string | null; // 保额
+        premium: string | null; // 保费
+      } | null;
+      
+      // 直接赔偿-财产损失
+      direct_compensation: {
+        covered: boolean;
+        deductible: string | null; // 垫底费
+        premium: string | null; // 保费
+      } | null;
+      
+      // 车辆损失保障
+      loss_or_damage: {
+        comprehensive: {
+          covered: boolean;
+          deductible: string | null;
+          premium: string | null;
+        } | null;
+        collision: {
+          covered: boolean;
+          deductible: string | null;
+          premium: string | null;
+        } | null;
+        all_perils: {
+          covered: boolean;
+          deductible: string | null;
+          premium: string | null;
+        } | null;
+        specified_perils: {
+          covered: boolean;
+          deductible: string | null;
+          premium: string | null;
+        } | null;
+      } | null;
+      
+      // 附加条款 Policy Change Forms
+      policy_change_forms: {
+        family_protection: {
+          covered: boolean;
+          deductible: string | null;
+          premium: string | null;
+        } | null;
+        // 可以添加其他附加条款
+      } | null;
+      
+      // 每台车的保费合计
+      total_premium: string | null;
+    } | null;
+  }>;
   
-  // 使用信息
-  annual_mileage: string | null;
-  commute_distance: string | null; // 通勤单程距离
-  automobile_use_details: string | null;
-  
-  // 驾驶员信息
+  // 多驾驶员信息 - 简单列表，无复杂车辆关系
   drivers: Array<{
     name: string;
     licence_number: string;
@@ -236,11 +320,41 @@ export interface ApplicationData extends BaseDocumentData {
     gender: string | null;
     marital_status: string | null;
     first_licensed_date: string | null; // 首次获得驾照日期
-  }> | null;
+  }>;
   
-  // 保险保障信息
-  insurance_coverages: {
-    liability_amount: string | null; // 第三者责任险金额 (1000=100万)
+  // 备注信息 - 完整提取所有内容，包括跨页
+  remarks: string | null;
+  
+  // 支付信息
+  payment_info: {
+    annual_premium: string | null; // Total Estimated Cost
+    monthly_payment: string | null; // Amount of Each Instalment
+    payment_type: 'annual' | 'monthly' | null; // 支付方式
+  } | null;
+  
+  // 签名确认
+  signatures: {
+    applicant_signed: boolean | null;
+    applicant_signature_date: string | null;
+    broker_signed: boolean | null;
+    broker_signature_date: string | null;
+  } | null;
+  
+  // 向后兼容字段 - 从第一个车辆/驾驶员提取
+  // name, licence_number, date_of_birth, address 继承自BaseDocumentData
+  vehicle_year?: string | null;
+  vehicle_make?: string | null;
+  vehicle_model?: string | null;
+  vin?: string | null;
+  lienholder_info?: string | null;
+  vehicle_ownership?: 'lease' | 'owned' | null;
+  annual_mileage?: string | null;
+  commute_distance?: string | null;
+  automobile_use_details?: string | null;
+  
+  // 向后兼容的旧结构保险保障信息
+  insurance_coverages?: {
+    liability_amount: string | null;
     loss_or_damage: {
       comprehensive: {
         covered: boolean;
@@ -258,32 +372,14 @@ export interface ApplicationData extends BaseDocumentData {
     } | null;
   } | null;
   
-  // 附加条款 Policy Change Forms
-  policy_change_forms: {
-    loss_of_use: boolean | null; // #20
-    liab_to_unowned_veh: boolean | null; // #27
-    limited_waiver: boolean | null; // #43a
-    rent_or_lease: boolean | null; // #5a
+  // 向后兼容的旧结构附加条款
+  policy_change_forms?: {
+    loss_of_use: boolean | null;
+    liab_to_unowned_veh: boolean | null;
+    limited_waiver: boolean | null;
+    rent_or_lease: boolean | null;
     accident_waiver: boolean | null;
     minor_conviction_protection: boolean | null;
-  } | null;
-  
-  // 备注信息
-  remarks: string | null;
-  
-  // 支付信息
-  payment_info: {
-    annual_premium: string | null; // Total Estimated Cost
-    monthly_payment: string | null; // Amount of Each Instalment
-    payment_type: 'annual' | 'monthly' | null; // 支付方式
-  } | null;
-  
-  // 签名确认
-  signatures: {
-    applicant_signed: boolean | null;
-    applicant_signature_date: string | null;
-    broker_signed: boolean | null;
-    broker_signature_date: string | null;
   } | null;
 }
 
