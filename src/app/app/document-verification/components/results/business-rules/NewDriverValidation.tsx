@@ -6,6 +6,7 @@ import { QuoteData, AutoPlusData } from '../../../types';
 
 export default function NewDriverValidation({ documents, onResultChange }: BusinessRuleProps) {
   const [result, setResult] = useState<BusinessRuleResult | null>(null);
+  const [loading, setLoading] = useState(false);
   const onResultChangeRef = useRef(onResultChange);
 
   // 避免闭包问题，更新ref
@@ -14,96 +15,76 @@ export default function NewDriverValidation({ documents, onResultChange }: Busin
   }, [onResultChange]);
 
   useEffect(() => {
-    const validateRule = () => {
-      // 优先从AutoPlus获取首次保险日期，否则从Quote获取相关保险日期
-      // 安全地获取文档数据
-      const autoplus = documents.autoplus as unknown as AutoPlusData | undefined;
-      const quote = documents.quote as unknown as QuoteData | undefined;
+    const validateRule = async () => {
+      setLoading(true);
       
-      let insuranceDate: string | null = null;
-      const dataSource: string[] = [];
-      
-      // 优先使用 AutoPlus 数据
-      if (autoplus?.first_insurance_date) {
-        insuranceDate = autoplus.first_insurance_date;
-        dataSource.push('AutoPlus');
-      }
-      
-      // 如果 AutoPlus 没有数据，尝试从 Quote 获取
-      if (!insuranceDate && quote) {
-        // 尝试多个可能的保险日期字段
-        insuranceDate = quote.date_insured || quote.date_with_company || null;
-        if (insuranceDate) {
-          dataSource.push('Quote');
+      try {
+        // 准备API请求数据
+        const autoplus = documents.autoplus as unknown as AutoPlusData | undefined;
+        const quote = documents.quote as unknown as QuoteData | undefined;
+
+        const requestData = {
+          autoplus: autoplus ? {
+            first_insurance_date: autoplus.first_insurance_date
+          } : undefined,
+          quote: quote ? {
+            date_insured: quote.date_insured,
+            date_with_company: quote.date_with_company
+          } : undefined
+        };
+
+        // 调用后端API
+        const response = await fetch('/api/business-rules/new-driver', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(requestData)
+        });
+
+        if (!response.ok) {
+          throw new Error(`API request failed: ${response.status}`);
         }
-      }
 
-      let ruleResult: BusinessRuleResult;
+        const apiResult: BusinessRuleResult = await response.json();
+        
+        setResult(apiResult);
+        onResultChangeRef.current?.(apiResult);
 
-      if (!insuranceDate) {
-        // 没有保险历史数据，视为新司机
-        ruleResult = {
+      } catch (error) {
+        console.error('New driver validation error:', error);
+        
+        // 处理API调用失败的情况
+        const errorResult: BusinessRuleResult = {
           id: 'new_driver',
           name: 'New Driver Validation',
-          status: 'requires_review',
-          result: {
-            first_insurance_date: null,
-            years_of_history: 0,
-            is_new_driver: true,
-            reason: 'No insurance history found'
-          },
-          recommendation: 'Review required: No insurance history found. Treat as new driver.',
-          details: 'No first insurance date found in AutoPlus or Quote documents. This indicates no prior insurance history.',
-          data_sources: ['AutoPlus', 'Quote']
+          status: 'failed',
+          recommendation: 'System error occurred during validation',
+          details: 'Unable to connect to validation service. Please try again.',
+          data_sources: []
         };
-      } else {
-        // 有保险历史数据，计算保险年数
-        const today = new Date();
-        const insuranceStart = new Date(insuranceDate);
-        const diffTime = today.getTime() - insuranceStart.getTime();
-        const diffYears = diffTime / (1000 * 60 * 60 * 24 * 365.25);
-
-        if (diffYears < 1) {
-          // 保险历史不足1年，视为新司机
-          ruleResult = {
-            id: 'new_driver',
-            name: 'New Driver Validation',
-            status: 'requires_review',
-            result: {
-              first_insurance_date: insuranceDate,
-              years_of_history: diffYears.toFixed(2),
-              is_new_driver: true,
-              reason: 'Less than 1 year of insurance history'
-            },
-            recommendation: 'Review required: Less than 1 year of insurance history. Treat as new driver.',
-            details: `First insurance date: ${insuranceDate}. Insurance history: ${diffYears.toFixed(2)} years.`,
-            data_sources: dataSource
-          };
-        } else {
-          // 保险历史充足，不是新司机
-          ruleResult = {
-            id: 'new_driver',
-            name: 'New Driver Validation',
-            status: 'passed',
-            result: {
-              first_insurance_date: insuranceDate,
-              years_of_history: diffYears.toFixed(2),
-              is_new_driver: false,
-              reason: 'Sufficient insurance history'
-            },
-            recommendation: 'No further action required. Insurance history is sufficient.',
-            details: `First insurance date: ${insuranceDate}. Insurance history: ${diffYears.toFixed(2)} years.`,
-            data_sources: dataSource
-          };
-        }
+        
+        setResult(errorResult);
+        onResultChangeRef.current?.(errorResult);
+      } finally {
+        setLoading(false);
       }
-
-      setResult(ruleResult);
-      onResultChangeRef.current?.(ruleResult);
     };
 
     validateRule();
   }, [documents]);
+
+  // 显示加载状态
+  if (loading) {
+    return (
+      <div className="border rounded-lg p-4 bg-gray-50 border-gray-200">
+        <div className="flex items-center space-x-2">
+          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+          <span className="text-gray-600">Validating new driver status...</span>
+        </div>
+      </div>
+    );
+  }
 
   if (!result) return null;
   const config = RULE_STATUS_CONFIG[result.status];

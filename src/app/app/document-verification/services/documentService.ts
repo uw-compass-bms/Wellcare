@@ -3,10 +3,10 @@ import { DocumentType, CachedFile } from '../types';
 export class DocumentService {
   // API端点映射
   private static apiEndpoints = {
-    mvr: '/api/extract-mvr',
-    autoplus: '/api/extract-autoplus',
-    quote: '/api/extract-quote',
-    application: '/api/extract-application'
+    mvr: '/api/document-extraction/mvr',
+    autoplus: '/api/document-extraction/autoplus',
+    quote: '/api/document-extraction/quote',
+    application: '/api/document-extraction/application'
   };
 
   // 处理单个文档

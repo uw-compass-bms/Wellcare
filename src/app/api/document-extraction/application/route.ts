@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
-import { ApplicationData } from '../../app/document-verification/types';
+import { ApplicationData } from '../../../app/document-verification/types';
 
 // 文件类型检测和编码函数
 function b64dataIsPdf(b64data: string): boolean {

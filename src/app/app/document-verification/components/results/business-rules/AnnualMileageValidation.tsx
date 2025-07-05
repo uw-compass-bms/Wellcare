@@ -6,6 +6,7 @@ import { ApplicationData, QuoteData } from '../../../types';
 
 export default function AnnualMileageValidation({ documents, onResultChange }: BusinessRuleProps) {
   const [result, setResult] = useState<BusinessRuleResult | null>(null);
+  const [loading, setLoading] = useState(false);
   const onResultChangeRef = useRef(onResultChange);
   
   // 更新ref以避免stale closure
@@ -14,127 +15,77 @@ export default function AnnualMileageValidation({ documents, onResultChange }: B
   }, [onResultChange]);
 
   useEffect(() => {
-    const validateRule = () => {
-      // 安全地获取文档数据
-      const application = documents.application as unknown as ApplicationData | undefined;
-      const quote = documents.quote as unknown as QuoteData | undefined;
+    const validateRule = async () => {
+      setLoading(true);
+      
+      try {
+        // 准备API请求数据
+        const application = documents.application as unknown as ApplicationData | undefined;
+        const quote = documents.quote as unknown as QuoteData | undefined;
 
-      // 检查必要数据是否存在 - 优先从Application获取，然后从Quote获取
-      const annualDistance = application?.annual_mileage || quote?.annual_mileage;
-      const commuteDistance = application?.commute_distance || quote?.commute_distance;
-
-      if (!annualDistance) {
-        const insufficientDataResult: BusinessRuleResult = {
-          id: 'annual_mileage',
-          name: 'Annual Mileage & Commute Validation',
-          status: 'insufficient_data',
-          recommendation: 'Upload complete Application or Quote with annual driving distance information',
-          details: 'Missing required data: Annual driving distance not found in Application or Quote',
-          data_sources: ['Application', 'Quote']
+        const requestData = {
+          application: application ? {
+            annual_mileage: application.annual_mileage,
+            commute_distance: application.commute_distance
+          } : undefined,
+          quote: quote ? {
+            annual_mileage: quote.annual_mileage,
+            commute_distance: quote.commute_distance
+          } : undefined
         };
-        setResult(insufficientDataResult);
-        onResultChangeRef.current?.(insufficientDataResult);
-        return;
-      }
 
-      // 解析年行驶距离数据
-      const numericAnnualDistance = parseFloat(annualDistance.replace(/[^\d.]/g, ''));
-      const numericCommuteDistance = commuteDistance ? parseFloat(commuteDistance.replace(/[^\d.]/g, '')) : null;
+        // 调用后端API
+        const response = await fetch('/api/business-rules/annual-mileage', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(requestData)
+        });
 
-      if (isNaN(numericAnnualDistance)) {
-        const failedResult: BusinessRuleResult = {
+        if (!response.ok) {
+          throw new Error(`API request failed: ${response.status}`);
+        }
+
+        const apiResult: BusinessRuleResult = await response.json();
+        
+        setResult(apiResult);
+        onResultChangeRef.current?.(apiResult);
+
+      } catch (error) {
+        console.error('Annual mileage validation error:', error);
+        
+        // 处理API调用失败的情况
+        const errorResult: BusinessRuleResult = {
           id: 'annual_mileage',
           name: 'Annual Mileage & Commute Validation',
           status: 'failed',
-          result: {
-            reported_distance: annualDistance,
-            parsed_distance: 'Invalid'
-          },
-          recommendation: 'Contact customer to clarify annual driving distance format',
-          details: `Unable to parse annual driving distance: "${annualDistance}". Please verify the format.`,
-          data_sources: application?.annual_mileage ? ['Application'] : ['Quote']
+          recommendation: 'System error occurred during validation',
+          details: 'Unable to connect to validation service. Please try again.',
+          data_sources: []
         };
-        setResult(failedResult);
-        onResultChangeRef.current?.(failedResult);
-        return;
+        
+        setResult(errorResult);
+        onResultChangeRef.current?.(errorResult);
+      } finally {
+        setLoading(false);
       }
-
-      const LOW_MILEAGE_THRESHOLD = 8000; // 低里程阈值
-      const MIN_COMMUTE_DISTANCE = 5; // 最小通勤距离阈值
-      let ruleResult: BusinessRuleResult;
-
-      // 判断各种情况
-      const isLowMileage = numericAnnualDistance <= LOW_MILEAGE_THRESHOLD;
-      const isLowCommute = numericCommuteDistance !== null && numericCommuteDistance < MIN_COMMUTE_DISTANCE;
-      const isZeroCommute = numericCommuteDistance === 0;
-
-      if (isLowMileage || isLowCommute || isZeroCommute) {
-        // 需要审核的情况
-        const issues = [];
-        if (isLowMileage) {
-          issues.push(`Annual mileage (${numericAnnualDistance.toLocaleString()} km) is at or below ${LOW_MILEAGE_THRESHOLD.toLocaleString()} km threshold`);
-        }
-        if (isZeroCommute) {
-          issues.push(`Zero commute distance reported`);
-        } else if (isLowCommute) {
-          issues.push(`Low commute distance (${numericCommuteDistance} km) is below ${MIN_COMMUTE_DISTANCE} km threshold`);
-        }
-
-        ruleResult = {
-          id: 'annual_mileage',
-          name: 'Annual Mileage & Commute Validation',
-          status: 'requires_review',
-          result: {
-            reported_distance: annualDistance,
-            parsed_distance: numericAnnualDistance,
-            threshold: LOW_MILEAGE_THRESHOLD,
-            commute_distance: commuteDistance,
-            parsed_commute: numericCommuteDistance,
-            commute_threshold: MIN_COMMUTE_DISTANCE,
-            classification: 'Requires Review - ' + (isLowMileage ? 'Low Mileage' : '') + 
-                           (isLowMileage && (isLowCommute || isZeroCommute) ? ' & ' : '') + 
-                           (isZeroCommute ? 'Zero Commute' : isLowCommute ? 'Low Commute' : ''),
-            issues: issues
-          },
-          recommendation: 'Mark for supervisor review and verify customer driving patterns',
-          details: `Issues found: ${issues.join('; ')}. This requires special attention and supervisor approval.`,
-          data_sources: [
-            ...(application?.annual_mileage ? ['Application'] : []),
-            ...(quote?.annual_mileage ? ['Quote'] : [])
-          ]
-        };
-      } else {
-        // 审核通过
-        ruleResult = {
-          id: 'annual_mileage',
-          name: 'Annual Mileage & Commute Validation',
-          status: 'passed',
-          result: {
-            reported_distance: annualDistance,
-            parsed_distance: numericAnnualDistance,
-            threshold: LOW_MILEAGE_THRESHOLD,
-            commute_distance: commuteDistance,
-            parsed_commute: numericCommuteDistance,
-            commute_threshold: MIN_COMMUTE_DISTANCE,
-            classification: 'Normal Usage Pattern'
-          },
-          recommendation: 'No further action required. Annual mileage and commute distance are within normal range.',
-          details: `Annual driving distance (${numericAnnualDistance.toLocaleString()} km) exceeds ${LOW_MILEAGE_THRESHOLD.toLocaleString()} km threshold` +
-                   (numericCommuteDistance !== null ? ` and commute distance (${numericCommuteDistance} km) is acceptable` : '') + 
-                   '. No additional review required.',
-          data_sources: [
-            ...(application?.annual_mileage ? ['Application'] : []),
-            ...(quote?.annual_mileage ? ['Quote'] : [])
-          ]
-        };
-      }
-
-      setResult(ruleResult);
-      onResultChangeRef.current?.(ruleResult);
     };
 
     validateRule();
   }, [documents]); // 移除onResultChange依赖，使用ref避免无限循环
+
+  // 显示加载状态
+  if (loading) {
+    return (
+      <div className="border rounded-lg p-4 bg-gray-50 border-gray-200">
+        <div className="flex items-center space-x-2">
+          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+          <span className="text-gray-600">Validating annual mileage...</span>
+        </div>
+      </div>
+    );
+  }
 
   if (!result) return null;
 
