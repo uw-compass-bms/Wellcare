@@ -6,9 +6,18 @@ const isProtectedRoute = createRouteMatcher([
 ]);
 
 export default clerkMiddleware(async (auth, req) => {
-  // 如果是受保护的路由，要求用户登录
-  if (isProtectedRoute(req)) {
-    await auth.protect();
+  try {
+    // 如果是受保护的路由，要求用户登录
+    if (isProtectedRoute(req)) {
+      await auth.protect();
+    }
+  } catch (error) {
+    console.error('Middleware error:', error);
+    // 在生产环境中，我们可以重定向到登录页面而不是抛出错误
+    if (process.env.NODE_ENV === 'production') {
+      return Response.redirect(new URL('/sign-in', req.url));
+    }
+    throw error;
   }
 });
 
