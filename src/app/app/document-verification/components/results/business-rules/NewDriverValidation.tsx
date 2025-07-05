@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useRef } from 'react';
-import { BusinessRuleProps, BusinessRuleResult, RULE_STATUS_CONFIG } from './types';
+import { BusinessRuleProps, BusinessRuleResult, RULE_STATUS_CONFIG, NewDriverResult } from './types';
 import { QuoteData, AutoPlusData } from '../../../types';
 
 export default function NewDriverValidation({ documents, onResultChange }: BusinessRuleProps) {
@@ -16,11 +16,12 @@ export default function NewDriverValidation({ documents, onResultChange }: Busin
   useEffect(() => {
     const validateRule = () => {
       // 优先从AutoPlus获取首次保险日期，否则从Quote获取相关保险日期
-      const autoplus = documents.autoplus as AutoPlusData;
-      const quote = documents.quote as QuoteData;
+      // 安全地获取文档数据
+      const autoplus = documents.autoplus as unknown as AutoPlusData | undefined;
+      const quote = documents.quote as unknown as QuoteData | undefined;
       
       let insuranceDate: string | null = null;
-      let dataSource: string[] = [];
+      const dataSource: string[] = [];
       
       // 优先使用 AutoPlus 数据
       if (autoplus?.first_insurance_date) {
@@ -129,11 +130,11 @@ export default function NewDriverValidation({ documents, onResultChange }: Busin
           <div className="mt-3 p-3 bg-white rounded border">
             <strong>Analysis:</strong>
             <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
-              <div><strong>First Insurance Date:</strong> {result.result.first_insurance_date || 'Not found'}</div>
-              <div><strong>Years of History:</strong> {result.result.years_of_history}</div>
-              <div><strong>New Driver:</strong> {result.result.is_new_driver ? 'Yes' : 'No'}</div>
-              {result.result.reason && (
-                <div className="md:col-span-2"><strong>Reason:</strong> {result.result.reason}</div>
+              <div><strong>First Insurance Date:</strong> {(result.result as NewDriverResult).first_insurance_date || 'Not found'}</div>
+              <div><strong>Years of History:</strong> {(result.result as NewDriverResult).years_of_history}</div>
+              <div><strong>New Driver:</strong> {(result.result as NewDriverResult).is_new_driver ? 'Yes' : 'No'}</div>
+              {(result.result as NewDriverResult).reason && (
+                <div className="md:col-span-2"><strong>Reason:</strong> {(result.result as NewDriverResult).reason}</div>
               )}
             </div>
           </div>

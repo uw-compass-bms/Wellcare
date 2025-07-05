@@ -1,6 +1,6 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Settings, Database, Download, Upload, FileText, BarChart3, Mail, Bell, Shield, Zap, Workflow, Code } from 'lucide-react';
+import { Settings, Database, Download, Upload, BarChart3, Mail, Bell, Shield, Zap, Workflow, Code } from 'lucide-react';
 
 export default function Tools() {
   // 工具分类配置

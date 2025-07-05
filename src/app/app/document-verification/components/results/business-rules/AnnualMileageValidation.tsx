@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useRef } from 'react';
-import { BusinessRuleProps, BusinessRuleResult, RULE_STATUS_CONFIG } from './types';
+import { BusinessRuleProps, BusinessRuleResult, RULE_STATUS_CONFIG, AnnualMileageResult } from './types';
 import { ApplicationData, QuoteData } from '../../../types';
 
 export default function AnnualMileageValidation({ documents, onResultChange }: BusinessRuleProps) {
@@ -15,8 +15,9 @@ export default function AnnualMileageValidation({ documents, onResultChange }: B
 
   useEffect(() => {
     const validateRule = () => {
-      const application = documents.application as ApplicationData;
-      const quote = documents.quote as QuoteData;
+      // 安全地获取文档数据
+      const application = documents.application as unknown as ApplicationData | undefined;
+      const quote = documents.quote as unknown as QuoteData | undefined;
 
       // 检查必要数据是否存在 - 优先从Application获取，然后从Quote获取
       const annualDistance = application?.annual_mileage || quote?.annual_mileage;
@@ -69,7 +70,7 @@ export default function AnnualMileageValidation({ documents, onResultChange }: B
 
       if (isLowMileage || isLowCommute || isZeroCommute) {
         // 需要审核的情况
-        let issues = [];
+        const issues = [];
         if (isLowMileage) {
           issues.push(`Annual mileage (${numericAnnualDistance.toLocaleString()} km) is at or below ${LOW_MILEAGE_THRESHOLD.toLocaleString()} km threshold`);
         }
@@ -163,11 +164,11 @@ export default function AnnualMileageValidation({ documents, onResultChange }: B
           <div className="mt-3 p-3 bg-white rounded border">
             <strong>Analysis:</strong>
             <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
-              <div><strong>Annual:</strong> {typeof result.result.parsed_distance === 'number' 
-                ? `${result.result.parsed_distance.toLocaleString()} km` 
-                : result.result.parsed_distance}</div>
-              {result.result.parsed_commute !== null && (
-                <div><strong>Commute:</strong> {result.result.parsed_commute} km</div>
+              <div><strong>Annual:</strong> {typeof (result.result as AnnualMileageResult).parsed_distance === 'number' 
+                ? `${((result.result as AnnualMileageResult).parsed_distance as number).toLocaleString()} km` 
+                : (result.result as AnnualMileageResult).parsed_distance}</div>
+              {(result.result as AnnualMileageResult).parsed_commute !== null && (
+                <div><strong>Commute:</strong> {(result.result as AnnualMileageResult).parsed_commute} km</div>
               )}
             </div>
             
@@ -175,7 +176,7 @@ export default function AnnualMileageValidation({ documents, onResultChange }: B
               <div className="mt-3 p-2 bg-yellow-100 border border-yellow-300 rounded text-xs">
                 <strong>Required Actions:</strong>
                 <ul className="mt-1 ml-4 list-disc space-y-1">
-                  {result.result.issues?.map((issue: string, index: number) => (
+                  {Array.isArray((result.result as AnnualMileageResult).issues) && (result.result as AnnualMileageResult).issues?.map((issue: string, index: number) => (
                     <li key={index} className="text-red-700 font-medium">{issue}</li>
                   ))}
                 </ul>

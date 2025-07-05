@@ -202,7 +202,7 @@ export default function LandingPage() {
               What Our Customers Say
             </h2>
             <p className="text-xl text-gray-600">
-              Don't just take our word for it
+              Don&apos;t just take our word for it
             </p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -214,7 +214,7 @@ export default function LandingPage() {
                       <Star key={i} className="w-5 h-5 text-yellow-400 fill-current" />
                     ))}
                   </div>
-                  <p className="text-gray-700 mb-4 italic">"{testimonial.content}"</p>
+                  <p className="text-gray-700 mb-4 italic">&ldquo;{testimonial.content}&rdquo;</p>
                   <div>
                     <div className="font-semibold text-gray-900">{testimonial.name}</div>
                     <div className="text-sm text-gray-600">{testimonial.role}, {testimonial.company}</div>

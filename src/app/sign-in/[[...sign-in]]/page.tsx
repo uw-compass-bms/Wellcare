@@ -15,7 +15,7 @@ export default function SignInPage() {
             Sign in to your account
           </h2>
           <p className="mt-2 text-sm text-gray-600">
-            Don't have an account?{' '}
+            Don&apos;t have an account?{' '}
             <Link href="/sign-up" className="font-medium text-blue-600 hover:text-blue-500">
               Sign up now
             </Link>

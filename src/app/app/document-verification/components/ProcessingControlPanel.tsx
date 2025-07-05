@@ -32,7 +32,7 @@ export default function ProcessingControlPanel({
   const errorCount = Object.values(documents).filter(doc => doc.error).length;
 
   // Get documents with cached files
-  const availableDocuments = Object.entries(documents).filter(([_, state]) => state.cached || state.uploaded);
+  const availableDocuments = Object.entries(documents).filter(([, state]) => state.cached || state.uploaded);
 
   // If no documents available, don't show panel
   if (availableDocuments.length === 0) return null;

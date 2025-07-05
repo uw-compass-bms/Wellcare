@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useRef } from 'react';
-import { BusinessRuleProps, BusinessRuleResult, RuleStatus, RULE_STATUS_CONFIG, formatDate, getMonthDay, subtractYears, getYearsDifference, datesAreClose } from './types';
+import { BusinessRuleProps, BusinessRuleResult, RuleStatus, RULE_STATUS_CONFIG, G1StartDateResult, formatDate, getMonthDay, subtractYears, getYearsDifference, datesAreClose } from './types';
 import { MvrData, QuoteData, AutoPlusData } from '../../../types';
 
 export default function G1StartDateValidation({ documents, onResultChange }: BusinessRuleProps) {
@@ -15,9 +15,10 @@ export default function G1StartDateValidation({ documents, onResultChange }: Bus
 
   useEffect(() => {
     const validateRule = () => {
-      const mvr = documents.mvr as MvrData;
-      const quote = documents.quote as QuoteData;
-      const autoplus = documents.autoplus as AutoPlusData;
+      // 安全地获取文档数据
+      const mvr = documents.mvr as unknown as MvrData | undefined;
+      const quote = documents.quote as unknown as QuoteData | undefined;
+      const autoplus = documents.autoplus as unknown as AutoPlusData | undefined;
 
       // 检查必要数据是否存在
       if (!mvr || !mvr.date_of_birth || !mvr.expiry_date) {
@@ -149,10 +150,10 @@ export default function G1StartDateValidation({ documents, onResultChange }: Bus
         result: {
           mvr_calculated_g1_date: formatDate(calculatedG1Date),
           calculation_method: calculationMethod,
-          quote_g1_date: formatDate(quoteG1Date),
-          quote_g2_date: formatDate(quoteG2Date),
-          quote_g_date: formatDate(quoteGDate),
-          first_insurance_date: formatDate(firstInsuranceDate),
+          quote_g1_date: formatDate(quoteG1Date || null),
+          quote_g2_date: formatDate(quoteG2Date || null),
+          quote_g_date: formatDate(quoteGDate || null),
+          first_insurance_date: formatDate(firstInsuranceDate || null),
           birth_date: formatDate(birthDate),
           expiry_date: formatDate(expiryDate),
           issue_date: formatDate(issueDate),
@@ -205,46 +206,46 @@ export default function G1StartDateValidation({ documents, onResultChange }: Bus
               <div className="border-l-4 border-blue-500 pl-3">
                 <h5 className="font-medium text-sm text-blue-900">MVR G1 Calculation</h5>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs mt-1">
-                  <div><strong>Calculated G1 Date:</strong> {result.result.mvr_calculated_g1_date}</div>
-                  <div><strong>Method:</strong> {result.result.calculation_method}</div>
-                  <div><strong>Birth Date:</strong> {result.result.birth_date}</div>
-                  <div><strong>Expiry Date:</strong> {result.result.expiry_date}</div>
-                  {result.result.issue_date !== 'N/A' && (
-                    <div><strong>Issue Date:</strong> {result.result.issue_date}</div>
+                  <div><strong>Calculated G1 Date:</strong> {(result.result as G1StartDateResult).mvr_calculated_g1_date}</div>
+                  <div><strong>Method:</strong> {(result.result as G1StartDateResult).calculation_method}</div>
+                  <div><strong>Birth Date:</strong> {(result.result as G1StartDateResult).birth_date}</div>
+                  <div><strong>Expiry Date:</strong> {(result.result as G1StartDateResult).expiry_date}</div>
+                  {(result.result as G1StartDateResult).issue_date !== 'N/A' && (
+                    <div><strong>Issue Date:</strong> {(result.result as G1StartDateResult).issue_date}</div>
                   )}
                 </div>
               </div>
               
               {/* Quote对比结果 */}
-              {result.result.quote_g1_date !== 'N/A' && (
+              {(result.result as G1StartDateResult).quote_g1_date !== 'N/A' && (
                 <div className="border-l-4 border-green-500 pl-3">
                   <h5 className="font-medium text-sm text-green-900">Quote G1 Comparison</h5>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs mt-1">
-                    <div><strong>Quote G1 Date:</strong> {result.result.quote_g1_date}</div>
-                    <div><strong>Dates Match:</strong> {result.result.g1_dates_match ? 'Yes' : 'No'}</div>
-                    {result.result.quote_g2_date !== 'N/A' && (
-                      <div><strong>Quote G2 Date:</strong> {result.result.quote_g2_date}</div>
+                    <div><strong>Quote G1 Date:</strong> {(result.result as G1StartDateResult).quote_g1_date}</div>
+                    <div><strong>Dates Match:</strong> {(result.result as G1StartDateResult).g1_dates_match ? 'Yes' : 'No'}</div>
+                    {(result.result as G1StartDateResult).quote_g2_date !== 'N/A' && (
+                      <div><strong>Quote G2 Date:</strong> {(result.result as G1StartDateResult).quote_g2_date}</div>
                     )}
-                    {result.result.quote_g_date !== 'N/A' && (
-                      <div><strong>Quote G Date:</strong> {result.result.quote_g_date}</div>
+                    {(result.result as G1StartDateResult).quote_g_date !== 'N/A' && (
+                      <div><strong>Quote G Date:</strong> {(result.result as G1StartDateResult).quote_g_date}</div>
                     )}
                   </div>
                 </div>
               )}
               
               {/* 10年规则验证 */}
-              {result.result.first_insurance_date !== 'N/A' && (
-                <div className={`border-l-4 ${result.result.ten_year_rule_triggered ? 'border-red-500' : 'border-yellow-500'} pl-3`}>
-                  <h5 className={`font-medium text-sm ${result.result.ten_year_rule_triggered ? 'text-red-900' : 'text-yellow-900'}`}>
+              {(result.result as G1StartDateResult).first_insurance_date !== 'N/A' && (
+                <div className={`border-l-4 ${(result.result as G1StartDateResult).ten_year_rule_triggered ? 'border-red-500' : 'border-yellow-500'} pl-3`}>
+                  <h5 className={`font-medium text-sm ${(result.result as G1StartDateResult).ten_year_rule_triggered ? 'text-red-900' : 'text-yellow-900'}`}>
                     10-Year Rule Verification
                   </h5>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs mt-1">
-                    <div><strong>First Insurance Date:</strong> {result.result.first_insurance_date}</div>
-                    <div><strong>License Date:</strong> {result.result.quote_g2_date !== 'N/A' ? result.result.quote_g2_date : result.result.quote_g_date}</div>
-                    {result.result.license_insurance_years_diff !== null && (
-                      <div><strong>Years Difference:</strong> {result.result.license_insurance_years_diff.toFixed(1)} years</div>
+                    <div><strong>First Insurance Date:</strong> {(result.result as G1StartDateResult).first_insurance_date}</div>
+                    <div><strong>License Date:</strong> {(result.result as G1StartDateResult).quote_g2_date !== 'N/A' ? (result.result as G1StartDateResult).quote_g2_date : (result.result as G1StartDateResult).quote_g_date}</div>
+                    {(result.result as G1StartDateResult).license_insurance_years_diff !== null && (
+                      <div><strong>Years Difference:</strong> {((result.result as G1StartDateResult).license_insurance_years_diff as number).toFixed(1)} years</div>
                     )}
-                    <div><strong>10-Year Rule Triggered:</strong> {result.result.ten_year_rule_triggered ? 'Yes' : 'No'}</div>
+                    <div><strong>10-Year Rule Triggered:</strong> {(result.result as G1StartDateResult).ten_year_rule_triggered ? 'Yes' : 'No'}</div>
                   </div>
                 </div>
               )}

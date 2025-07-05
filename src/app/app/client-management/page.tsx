@@ -1,6 +1,6 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Users, Plus, Search, Filter, FileText, Calendar, Phone, Mail, MapPin, TrendingUp } from 'lucide-react';
+import { Users, Plus, Search, Filter, FileText, Calendar, Phone, Mail, TrendingUp } from 'lucide-react';
 
 export default function ClientManagement() {
   // 客户数据示例

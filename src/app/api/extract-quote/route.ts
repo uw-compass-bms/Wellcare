@@ -251,7 +251,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { b64data, fileName, fileSize, fileType } = body;
+    const { b64data, fileName, fileSize } = body;
 
     // 基本验证
     if (!b64data || !fileName) {

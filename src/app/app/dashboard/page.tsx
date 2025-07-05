@@ -70,7 +70,7 @@ export default function Dashboard() {
       {/* 欢迎区域 */}
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900">Welcome back!</h1>
-        <p className="mt-2 text-gray-600">Here's your system overview and quick action panel</p>
+        <p className="mt-2 text-gray-600">Here&apos;s your system overview and quick action panel</p>
       </div>
 
       {/* 统计卡片 */}

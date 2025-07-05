@@ -17,10 +17,10 @@ export default function BusinessRulesValidation({ documents }: BusinessRulesVali
 
   // 准备文档数据供规则使用 - 使用useMemo避免无限循环
   const preparedDocuments = useMemo(() => ({
-    mvr: documents.mvr?.data || null,
-    application: documents.application?.data || null,
-    autoplus: documents.autoplus?.data || null,
-    quote: documents.quote?.data || null,
+    mvr: documents.mvr?.data as unknown as Record<string, unknown> | undefined,
+    application: documents.application?.data as unknown as Record<string, unknown> | undefined,
+    autoplus: documents.autoplus?.data as unknown as Record<string, unknown> | undefined,
+    quote: documents.quote?.data as unknown as Record<string, unknown> | undefined,
   }), [
     documents.mvr?.data,
     documents.application?.data,
