@@ -120,7 +120,53 @@ You are an expert AI agent specializing in OCR and data extraction from insuranc
           "lapses": [],
           "convictions": []
         }
-      ]
+      ],
+      "coverages": {
+        "bodily_injury": {
+          "covered": true,
+          "amount": "2000000"
+        },
+        "direct_compensation": {
+          "covered": true,
+          "deductible": "0"
+        },
+        "accident_benefits": {
+          "covered": true,
+          "type": "Standard"
+        },
+        "uninsured_automobile": {
+          "covered": true
+        },
+        "loss_or_damage": {
+          "comprehensive": {
+            "covered": true,
+            "deductible": "1000"
+          },
+          "collision": {
+            "covered": true,
+            "deductible": "1000"
+          },
+          "all_perils": null
+        },
+        "endorsements": {
+          "rent_or_lease": true,
+          "loss_of_use": {
+            "covered": true,
+            "amount": "2000"
+          },
+          "liab_to_unowned_veh": {
+            "covered": true,
+            "amount": "75000"
+          },
+          "replacement_cost": true,
+          "family_protection": {
+            "covered": true,
+            "amount": "2000000"
+          },
+          "accident_waiver": true,
+          "minor_conviction_protection": true
+        }
+      }
     }
   ],
   "driver_limit_notice": null
@@ -162,9 +208,35 @@ You are an expert AI agent specializing in OCR and data extraction from insuranc
 
 4. **Claims/Lapses/Convictions**: Extract these from the driver's individual section, following same format as before.
 
-5. **Vehicle Information**: Extract complete vehicle details for each vehicle.
+5. **Coverage Extraction - CRITICAL**: 
+   - **Location**: Look for "Coverages" section under each vehicle
+   - **MUTUAL EXCLUSION RULE**: All Perils VS Collision/Comprehensive are MUTUALLY EXCLUSIVE
+     * IF document shows "All Perils" → set all_perils.covered=true, collision=null, comprehensive=null
+     * IF document shows "Collision" and/or "Comprehensive" → set those accordingly, all_perils=null
+   - **Coverage Types**:
+     * **Bodily Injury (amount)** → bodily_injury: { covered: true, amount: "2000000" }
+     * **Direct Compensation (deductible)** → direct_compensation: { covered: true, deductible: "0" }
+     * **Accident Benefits (type)** → accident_benefits: { covered: true, type: "Standard" }
+     * **Collision (deductible)** → collision: { covered: true, deductible: "1000" }
+     * **Comprehensive (deductible)** → comprehensive: { covered: true, deductible: "1000" }
+     * **All Perils (deductible)** → all_perils: { covered: true, deductible: "500" }
+     * **Uninsured Automobile** → uninsured_automobile: { covered: true }
+   - **Endorsements (附加条款)**:
+     * **#5a Rent or Lease** → rent_or_lease: true
+     * **#20 Loss of Use (amount)** → loss_of_use: { covered: true, amount: "2000" }
+     * **#27 Liab to Unowned Veh. (amount)** → liab_to_unowned_veh: { covered: true, amount: "75000" }
+     * **#43 Replacement Cost** → replacement_cost: true
+     * **#44 Family Protection (amount)** → family_protection: { covered: true, amount: "2000000" }
+     * **Accident Waiver** → accident_waiver: true
+     * **Minor Conviction Protection** → minor_conviction_protection: true
+   - **Amount vs Deductible**:
+     * Numbers in parentheses after coverage names are usually DEDUCTIBLES for collision/comprehensive/all perils
+     * Numbers in parentheses after endorsements are usually AMOUNTS (coverage limits)
+     * Bodily Injury amounts are coverage limits, not deductibles
 
-6. **Important Notes**:
+6. **Vehicle Information**: Extract complete vehicle details for each vehicle.
+
+7. **Important Notes**:
    - **Same driver can appear on multiple vehicles with different roles**
    - **Extract driver information completely for each vehicle they appear on**
    - **Role is vehicle-specific, not global**
@@ -407,7 +479,8 @@ export async function POST(request: NextRequest) {
 
       // 数据验证和清理
       if (processedData.vehicles && processedData.vehicles.length > 0) {
-        processedData.vehicles.forEach((vehicle: any, vehicleIndex: number) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        processedData.vehicles.forEach((vehicle: any) => {
           // 确保每个车辆都有drivers数组
           if (!vehicle.drivers || !Array.isArray(vehicle.drivers)) {
             vehicle.drivers = [];
@@ -422,6 +495,7 @@ export async function POST(request: NextRequest) {
           }
           
           // 处理每个驾驶员
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           vehicle.drivers.forEach((driver: any, driverIndex: number) => {
             // 确保所有必要字段存在
             if (!driver.claims || !Array.isArray(driver.claims)) {

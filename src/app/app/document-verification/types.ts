@@ -98,11 +98,61 @@ export interface QuoteData {
         severity: string | null;
       }>;
     }>;
-    coverages: Array<{
-      type: string;
-      amount: string;
-      premium: string;
-    }>;
+    // 保险保障信息 - 与Application结构保持一致以便对比
+    coverages: {
+      // 基础责任险
+      bodily_injury: {
+        covered: boolean;
+        amount: string | null; // 保额
+      } | null;
+      direct_compensation: {
+        covered: boolean;
+        deductible: string | null; // 垫底费
+      } | null;
+      accident_benefits: {
+        covered: boolean;
+        type: string | null; // Standard, Enhanced等
+      } | null;
+      uninsured_automobile: {
+        covered: boolean;
+      } | null;
+      
+      // 车辆损失保障 - 与Application完全一致
+      loss_or_damage: {
+        comprehensive: {
+          covered: boolean;
+          deductible: string | null;
+        } | null;
+        collision: {
+          covered: boolean;
+          deductible: string | null;
+        } | null;
+        all_perils: {
+          covered: boolean;
+          deductible: string | null;
+        } | null;
+      } | null;
+      
+      // 附加条款
+      endorsements: {
+        rent_or_lease: boolean | null; // #5a
+        loss_of_use: {
+          covered: boolean;
+          amount: string | null; // 保额
+        } | null; // #20
+        liab_to_unowned_veh: {
+          covered: boolean;
+          amount: string | null; // 保额
+        } | null; // #27
+        replacement_cost: boolean | null; // #43
+        family_protection: {
+          covered: boolean;
+          amount: string | null; // 保额
+        } | null; // #44
+        accident_waiver: boolean | null;
+        minor_conviction_protection: boolean | null;
+      } | null;
+    } | null;
   }>;
   driver_limit_notice?: string;
   
@@ -131,9 +181,30 @@ export interface QuoteData {
     email: string | null;
     phone: string | null;
   } | null;
-  claims?: Array<any>;
-  convictions?: Array<any>;
-  lapses?: Array<any>;
+  claims?: Array<{
+    description: string;
+    date: string;
+    at_fault: boolean;
+    vehicle_involved: string;
+    tp_bi: string | null;
+    tp_pd: string | null;
+    ab: string | null;
+    coll: string | null;
+    other_pd: string | null;
+    vehicle_mismatch?: boolean;
+  }>;
+  convictions?: Array<{
+    description: string;
+    date: string;
+    kmh: string | null;
+    severity: string | null;
+  }>;
+  lapses?: Array<{
+    description: string;
+    date: string;
+    duration_months: number;
+    re_instate_date: string;
+  }>;
 }
 
 // Application数据类型 - 根据Ontario汽车保险申请表提取规则定义

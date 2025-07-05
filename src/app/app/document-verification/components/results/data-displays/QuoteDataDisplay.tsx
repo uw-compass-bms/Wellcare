@@ -9,15 +9,51 @@ interface QuoteDataDisplayProps {
 // 驾驶员整合信息类型
 interface ConsolidatedDriver {
   name: string;
-  personal_info: any; // 个人信息只保留一份
+  personal_info: {
+    birth_date: string | null;
+    marital_status: string | null;
+    gender: string | null;
+    relationship_to_applicant: string | null;
+    licence_number: string | null;
+    licence_province: string | null;
+    occupation: string | null;
+    licence_class: string | null;
+    date_g: string | null;
+    date_g2: string | null;
+    date_g1: string | null;
+    date_insured: string | null;
+    current_carrier: string | null;
+    date_with_company: string | null;
+  };
   vehicle_relationships: Array<{
     vehicle_index: number;
     vehicle_display: string;
     role: 'prn' | 'occ';
   }>;
-  claims: any[];
-  lapses: any[];
-  convictions: any[];
+  claims: Array<{
+    description: string;
+    date: string;
+    at_fault: boolean;
+    vehicle_involved: string;
+    tp_bi: string | null;
+    tp_pd: string | null;
+    ab: string | null;
+    coll: string | null;
+    other_pd: string | null;
+    vehicle_mismatch?: boolean;
+  }>;
+  lapses: Array<{
+    description: string;
+    date: string;
+    duration_months: number;
+    re_instate_date: string;
+  }>;
+  convictions: Array<{
+    description: string;
+    date: string;
+    kmh: string | null;
+    severity: string | null;
+  }>;
 }
 
 export default function QuoteDataDisplay({ data }: QuoteDataDisplayProps) {
@@ -116,6 +152,48 @@ export default function QuoteDataDisplay({ data }: QuoteDataDisplayProps) {
                       <div><strong>Daily Commute:</strong> {vehicle.daily_km}</div>
                     )}
                   </div>
+                  
+                  {/* Coverage信息 */}
+                  {vehicle.coverages && (
+                    <div className="mt-4 pt-4 border-t border-gray-300">
+                      <h5 className="font-medium text-gray-800 mb-2">Coverage Summary</h5>
+                      <div className="space-y-1 text-xs">
+                        {vehicle.coverages.bodily_injury && (
+                          <div><strong>Bodily Injury:</strong> ${vehicle.coverages.bodily_injury.amount || 'N/A'}</div>
+                        )}
+                        {vehicle.coverages.loss_or_damage?.all_perils && (
+                          <div><strong>All Perils:</strong> ${vehicle.coverages.loss_or_damage.all_perils.deductible || '0'} deductible</div>
+                        )}
+                        {vehicle.coverages.loss_or_damage?.collision && (
+                          <div><strong>Collision:</strong> ${vehicle.coverages.loss_or_damage.collision.deductible || '0'} deductible</div>
+                        )}
+                        {vehicle.coverages.loss_or_damage?.comprehensive && (
+                          <div><strong>Comprehensive:</strong> ${vehicle.coverages.loss_or_damage.comprehensive.deductible || '0'} deductible</div>
+                        )}
+                        {vehicle.coverages.endorsements && (
+                          <div className="mt-2 text-gray-600">
+                            <div><strong>Endorsements:</strong> {
+                              Object.entries(vehicle.coverages.endorsements)
+                                .filter(([, value]) => value === true || (value && typeof value === 'object' && value.covered))
+                                .map(([key]) => {
+                                  const endorsementNames: { [key: string]: string } = {
+                                    'rent_or_lease': '#5a',
+                                    'loss_of_use': '#20',
+                                    'liab_to_unowned_veh': '#27',
+                                    'replacement_cost': '#43',
+                                    'family_protection': '#44',
+                                    'accident_waiver': 'AccWv',
+                                    'minor_conviction_protection': 'MinConvProt'
+                                  };
+                                  return endorsementNames[key] || key;
+                                })
+                                .join(', ') || 'None'
+                            }</div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
