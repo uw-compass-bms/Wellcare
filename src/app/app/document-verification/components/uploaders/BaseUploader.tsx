@@ -1,5 +1,5 @@
 "use client";
-import React from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { CheckCircle, Loader2, Upload, Clock, LucideIcon } from 'lucide-react';
@@ -27,9 +27,12 @@ export default function BaseUploader({
   acceptedFormats = ".pdf,.png,.jpg,.jpeg,.webp"
 }: BaseUploaderProps) {
   
+  const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
+
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
+      setUploadedFileName(file.name);
       onFileUpload(file);
     }
   };
@@ -159,9 +162,9 @@ export default function BaseUploader({
             </div>
           )}
           
-          <p className="text-xs text-gray-500">
-            Supports PDF, PNG, JPG, JPEG, WebP
-          </p>
+          {uploadedFileName && (
+            <p className="text-xs text-gray-500">Uploaded file: {uploadedFileName}</p>
+          )}
         </div>
       </CardContent>
     </Card>
