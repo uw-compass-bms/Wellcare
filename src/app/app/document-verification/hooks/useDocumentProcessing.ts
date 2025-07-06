@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { DocumentType, DocumentState, CachedFileWithId, MultiFileState } from '../types';
+import { DocumentType, DocumentState, CachedFileWithId } from '../types';
 import { DocumentService } from '../services/documentService';
 
 export function useDocumentProcessing() {
@@ -45,10 +45,7 @@ export function useDocumentProcessing() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingStep, setProcessingStep] = useState<DocumentType | null>(null);
 
-  // 生成唯一文件ID
-  const generateFileId = () => {
-    return Date.now().toString(36) + Math.random().toString(36).substr(2);
-  };
+
 
   // 支持多文件的文档类型
   const MULTI_FILE_TYPES: DocumentType[] = ['mvr', 'autoplus'];
@@ -277,36 +274,52 @@ export function useDocumentProcessing() {
     console.log('Validation triggered for all extracted documents');
   };
 
-  // Process all documents (extract + validate)
+  // 智能处理所有文档（单文件 + 多文件）
   const processDocuments = async () => {
-    // Find documents that need extraction: cached but not extracted yet
-    const pendingDocuments = Object.entries(documents).filter(
-      ([, state]) => state.cached && !state.uploaded && state.cachedFile
-    );
-    
-    if (pendingDocuments.length === 0) {
-      // No pending documents, just trigger validation
-      validateDocuments();
-      return;
-    }
-
     setIsProcessing(true);
 
     try {
-      // Process each pending document in sequence
-      for (const [type, state] of pendingDocuments) {
+      // 1. 处理MVR多文件（如果存在）
+      if (documents.mvr.isMultiFile && documents.mvr.multiFileState && 
+          Object.keys(documents.mvr.multiFileState.files).length > 0 && 
+          !documents.mvr.uploaded) {
+        setProcessingStep('mvr');
+        console.log('Processing MVR multi-files...');
+        await processMultiFiles('mvr');
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+
+      // 2. 处理Auto+多文件（如果存在）
+      if (documents.autoplus.isMultiFile && documents.autoplus.multiFileState && 
+          Object.keys(documents.autoplus.multiFileState.files).length > 0 && 
+          !documents.autoplus.uploaded) {
+        setProcessingStep('autoplus');
+        console.log('Processing Auto+ multi-files...');
+        await processMultiFiles('autoplus');
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+
+      // 3. 处理其他单文件文档
+      const singleFileDocuments = Object.entries(documents).filter(
+        ([, state]) => {
+          // 单文件文档：有缓存文件但未上传，且不是多文件模式
+          return state.cached && !state.uploaded && state.cachedFile && !state.isMultiFile;
+        }
+      );
+
+      for (const [type, state] of singleFileDocuments) {
         if (state.cachedFile) {
           setProcessingStep(type as DocumentType);
+          console.log(`Processing single ${type} document...`);
           await processDocument(type as DocumentType);
-          
-          // Add small delay to avoid API rate limits
           await new Promise(resolve => setTimeout(resolve, 500));
         }
       }
 
-      // All documents processed, trigger validation
+      // 4. 处理完成，触发验证
       setProcessingStep(null);
       validateDocuments();
+      console.log('All documents processed successfully!');
 
     } catch (error) {
       console.error("Document processing error:", error);
@@ -317,8 +330,8 @@ export function useDocumentProcessing() {
   };
 
   // 处理多文件提取（MVR和AutoPlus使用）
-  const processMultiFiles = async (type: DocumentType = 'mvr') => {
-    const multiState = documents[type].multiFileState!;
+  const processMultiFiles = async (docType: DocumentType = 'mvr') => {
+    const multiState = documents[docType].multiFileState!;
     const filesList = Object.values(multiState.files);
     
     if (filesList.length === 0) return;
@@ -326,8 +339,8 @@ export function useDocumentProcessing() {
     // 设置处理状态
     setDocuments(prev => ({
       ...prev,
-      [type]: {
-        ...prev[type],
+      [docType]: {
+        ...prev[docType],
         loading: true,
         error: null
       }
@@ -338,18 +351,16 @@ export function useDocumentProcessing() {
       const filesData = filesList.map(file => ({
         fileId: file.fileId,
         fileName: file.fileName,
-        fileSize: file.fileSize,
-        fileType: file.fileType,
         b64data: file.b64data
       }));
 
       // 标记所有文件为处理中
       setDocuments(prev => ({
         ...prev,
-        [type]: {
-          ...prev[type],
+        [docType]: {
+          ...prev[docType],
           multiFileState: {
-            ...prev[type].multiFileState!,
+            ...prev[docType].multiFileState!,
             processingFiles: new Set(filesList.map(f => f.fileId)),
             errors: {} // 清除之前的错误
           }
@@ -357,7 +368,7 @@ export function useDocumentProcessing() {
       }));
 
       // 调用多文件API
-      const apiEndpoint = type === 'mvr' 
+      const apiEndpoint = docType === 'mvr' 
         ? '/api/document-extraction/mvr' 
         : '/api/document-extraction/autoplus';
       
@@ -378,17 +389,17 @@ export function useDocumentProcessing() {
       // 更新处理状态
       setDocuments(prev => ({
         ...prev,
-        [type]: {
-          ...prev[type],
+        [docType]: {
+          ...prev[docType],
           data: result.data,
           loading: false,
           uploaded: true,
           multiFileState: {
-            ...prev[type].multiFileState!,
+            ...prev[docType].multiFileState!,
             processingFiles: new Set(),
             processedFiles: new Set(filesList.map(f => f.fileId)),
             errors: result.metadata?.errors ? 
-              Object.fromEntries(result.metadata.errors.map((e: any) => [e.fileId, e.error])) : {}
+              Object.fromEntries(result.metadata.errors.map((e: {fileId: string; error: string}) => [e.fileId, e.error])) : {}
           }
         }
       }));
@@ -397,12 +408,12 @@ export function useDocumentProcessing() {
       // 处理失败，清除处理状态
       setDocuments(prev => ({
         ...prev,
-        [type]: {
-          ...prev[type],
+        [docType]: {
+          ...prev[docType],
           loading: false,
           error: err instanceof Error ? err.message : '多文件处理失败',
           multiFileState: {
-            ...prev[type].multiFileState!,
+            ...prev[docType].multiFileState!,
             processingFiles: new Set()
           }
         }
@@ -419,7 +430,6 @@ export function useDocumentProcessing() {
     // 多文件相关功能
     handleMultiFileUpload,
     handleFileDelete,
-    handleFileReplace,
-    processMultiFiles
+    handleFileReplace
   };
 } 

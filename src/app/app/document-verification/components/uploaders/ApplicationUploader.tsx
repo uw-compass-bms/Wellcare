@@ -16,7 +16,6 @@ export default function ApplicationUploader({ documentState, onFileUpload }: App
       title="Application Forms"
       description="Ontario (OAF 1)"
       icon={FileCheck}
-      color="orange"
       inputId="application-upload"
     />
   );

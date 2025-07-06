@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Car, Upload, Trash2, RefreshCw, X, Clock, CheckCircle, Loader2 } from 'lucide-react';
-import { DocumentState, CachedFileWithId, MultiFileState } from '../../types';
+import { DocumentState, CachedFileWithId } from '../../types';
 
 interface AutoPlusUploaderProps {
   documentState: DocumentState;
@@ -31,25 +31,25 @@ export default function AutoPlusUploader({
     return (
       <Card className={`hover:shadow-lg transition-shadow ${
         documentState.uploaded ? 'border-green-200 border-2' :
-        documentState.cached ? 'border-green-200 border-2' :
+        documentState.cached ? 'border-blue-200 border-2' :
         documentState.error ? 'border-red-200 border-2' :
         'border-gray-200'
       }`}>
         <CardHeader className="text-center">
           <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 relative ${
             documentState.uploaded ? 'bg-green-50' :
-            documentState.cached ? 'bg-green-50' :
+            documentState.cached ? 'bg-blue-50' :
             documentState.error ? 'bg-red-50' :
             'bg-green-50'
           }`}>
             <Car className={`w-8 h-8 ${
               documentState.uploaded ? 'text-green-600' :
-              documentState.cached ? 'text-green-600' :
+              documentState.cached ? 'text-blue-600' :
               documentState.error ? 'text-red-600' :
               'text-green-600'
             }`} />
             {documentState.loading && (
-              <div className="absolute -top-1 -right-1 w-6 h-6 bg-green-500 rounded-full flex items-center justify-center">
+              <div className="absolute -top-1 -right-1 w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center">
                 <Loader2 className="w-4 h-4 text-white animate-spin" />
               </div>
             )}
@@ -144,13 +144,13 @@ export default function AutoPlusUploader({
     const status = getFileStatus(file);
     switch (status) {
       case 'processing':
-        return <Loader2 className="w-4 h-4 text-green-600 animate-spin" />;
+        return <Loader2 className="w-4 h-4 text-blue-600 animate-spin" />;
       case 'processed':
         return <CheckCircle className="w-4 h-4 text-green-600" />;
       case 'error':
         return <X className="w-4 h-4 text-red-600" />;
       default:
-        return <Clock className="w-4 h-4 text-orange-600" />;
+        return <Clock className="w-4 h-4 text-blue-600" />;
     }
   };
 
@@ -158,13 +158,13 @@ export default function AutoPlusUploader({
     const status = getFileStatus(file);
     switch (status) {
       case 'processing':
-        return 'border-green-200 bg-green-50';
+        return 'border-blue-200 bg-blue-50';
       case 'processed':
         return 'border-green-200 bg-green-50';
       case 'error':
         return 'border-red-200 bg-red-50';
       default:
-        return 'border-orange-200 bg-orange-50';
+        return 'border-blue-200 bg-blue-50';
     }
   };
 
@@ -185,15 +185,15 @@ export default function AutoPlusUploader({
     }
     if (hasFiles) {
       return {
-        border: 'border-green-200 border-2',
-        bg: 'bg-green-50',
-        iconColor: 'text-green-600'
+        border: 'border-blue-200 border-2',
+        bg: 'bg-blue-50',
+        iconColor: 'text-blue-600'
       };
     }
     return {
       border: 'border-gray-200',
-      bg: 'bg-green-50',
-      iconColor: 'text-green-600'
+      bg: 'bg-blue-50',
+      iconColor: 'text-blue-600'
     };
   };
 

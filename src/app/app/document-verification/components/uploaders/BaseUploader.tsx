@@ -11,7 +11,6 @@ interface BaseUploaderProps {
   title: string;
   description: string;
   icon: LucideIcon;
-  color: string;
   inputId: string;
   acceptedFormats?: string;
 }
@@ -22,7 +21,6 @@ export default function BaseUploader({
   title,
   description,
   icon: Icon,
-  color,
   inputId,
   acceptedFormats = ".pdf,.png,.jpg,.jpeg,.webp"
 }: BaseUploaderProps) {
@@ -41,9 +39,9 @@ export default function BaseUploader({
   const getStatusStyles = () => {
     if (documentState.loading) {
       return {
-        border: `border-${color}-300 border-2`,
-        bg: `bg-${color}-50`,
-        iconColor: `text-${color}-600`,
+        border: 'border-blue-300 border-2',
+        bg: 'bg-blue-50',
+        iconColor: 'text-blue-600',
         status: 'extracting'
       };
     }
@@ -57,9 +55,9 @@ export default function BaseUploader({
     }
     if (documentState.cached) {
       return {
-        border: `border-${color}-200 border-2`,
-        bg: `bg-${color}-50`,
-        iconColor: `text-${color}-600`,
+        border: 'border-blue-200 border-2',
+        bg: 'bg-blue-50',
+        iconColor: 'text-blue-600',
         status: 'pending_extraction'
       };
     }
@@ -73,8 +71,8 @@ export default function BaseUploader({
     }
     return {
       border: 'border-gray-200',
-      bg: `bg-${color}-50`,
-      iconColor: `text-${color}-600`,
+      bg: 'bg-blue-50',
+      iconColor: 'text-blue-600',
       status: 'empty'
     };
   };

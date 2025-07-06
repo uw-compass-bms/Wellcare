@@ -333,7 +333,7 @@ export async function PUT(request: NextRequest) {
     // 依次处理每个文件
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
-      const { b64data, fileName, fileSize, fileType, fileId } = file;
+      const { b64data, fileName, fileId } = file;
       
       if (!b64data) {
         processingErrors.push(`文件 ${fileName} 缺少文件数据`);

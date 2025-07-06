@@ -48,7 +48,7 @@ export default function AutoPlusDataDisplay({ data }: AutoPlusDataDisplayProps) 
       <div className="space-y-6">
         {/* 展开/收起所有按钮 */}
         <div className="flex justify-between items-center">
-          <h3 className="font-semibold text-gray-900">Individual Records ({totalRecords})</h3>
+          <h3 className="font-semibold text-gray-900">Auto+ Records ({totalRecords})</h3>
           <button
             onClick={toggleExpandAll}
             className="text-sm text-green-600 hover:text-green-800 flex items-center space-x-1"
@@ -73,7 +73,6 @@ export default function AutoPlusDataDisplay({ data }: AutoPlusDataDisplayProps) 
             const recordId = record.file_id || record.file_name || `record-${index}`;
             const isExpanded = expandedRecords.has(recordId);
             const hasClaims = record.claims && record.claims.length > 0;
-            const hasAtFaultClaims = record.claims && record.claims.some(claim => claim.at_fault);
             const hasPolicies = record.policies && record.policies.length > 0;
 
             return (
@@ -102,13 +101,13 @@ export default function AutoPlusDataDisplay({ data }: AutoPlusDataDisplayProps) 
                       {/* 状态指示器 */}
                       <div className="flex items-center space-x-2">
                         {hasPolicies && (
-                          <div className="flex items-center space-x-1 text-blue-600">
+                          <div className="flex items-center space-x-1 text-green-600">
                             <CheckCircle className="w-4 h-4" />
                             <span className="text-xs">Policies</span>
                           </div>
                         )}
                         {hasClaims && (
-                          <div className={`flex items-center space-x-1 ${hasAtFaultClaims ? 'text-red-600' : 'text-orange-600'}`}>
+                          <div className="flex items-center space-x-1 text-red-600">
                             <AlertCircle className="w-4 h-4" />
                             <span className="text-xs">Claims</span>
                           </div>
@@ -179,7 +178,7 @@ function AutoPlusRecordDetails({ record }: { record: AutoPlusData }) {
                 </tr>
               </thead>
               <tbody>
-                {record.policies.map((policy: any, index: number) => (
+                {record.policies.map((policy, index: number) => (
                   <tr key={index} className="border-b">
                     <td className="py-2 px-3">{policy.policy_period}</td>
                     <td className="py-2 px-3">{policy.company}</td>
@@ -216,7 +215,7 @@ function AutoPlusRecordDetails({ record }: { record: AutoPlusData }) {
                 </tr>
               </thead>
               <tbody>
-                {record.claims.map((claim: any, index: number) => (
+                {record.claims.map((claim, index: number) => (
                   <tr key={index} className="border-b">
                     <td className="py-2 px-3">{claim.claim_number}</td>
                     <td className="py-2 px-3">{claim.date_of_loss}</td>

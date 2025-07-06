@@ -2,8 +2,8 @@
 import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { FileText, Upload, Trash2, RefreshCw, X, Clock, CheckCircle, Loader2, AlertTriangle } from 'lucide-react';
-import { DocumentState, CachedFileWithId, MultiFileState } from '../../types';
+import { FileText, Upload, Trash2, RefreshCw, X, Clock, CheckCircle, Loader2 } from 'lucide-react';
+import { DocumentState, CachedFileWithId } from '../../types';
 
 interface MvrUploaderProps {
   documentState: DocumentState;
@@ -150,7 +150,7 @@ export default function MvrUploader({
       case 'error':
         return <X className="w-4 h-4 text-red-600" />;
       default:
-        return <Clock className="w-4 h-4 text-orange-600" />;
+        return <Clock className="w-4 h-4 text-blue-600" />;
     }
   };
 
@@ -164,7 +164,7 @@ export default function MvrUploader({
       case 'error':
         return 'border-red-200 bg-red-50';
       default:
-        return 'border-orange-200 bg-orange-50';
+        return 'border-blue-200 bg-blue-50';
     }
   };
 

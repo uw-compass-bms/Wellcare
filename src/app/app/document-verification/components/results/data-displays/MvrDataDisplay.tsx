@@ -2,9 +2,8 @@
 
 import { useState } from 'react';
 import { MvrData, MvrMultiData } from '../../../types';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { ChevronDown, ChevronUp, FileText, AlertTriangle, CheckCircle } from 'lucide-react';
+
+import { ChevronDown, ChevronUp, AlertTriangle, CheckCircle, FileText, ChevronRight } from 'lucide-react';
 
 interface MvrDataDisplayProps {
   data: MvrData | MvrMultiData;
@@ -186,128 +185,89 @@ export default function MvrDataDisplay({ data }: MvrDataDisplayProps) {
     setShowAll(!showAll);
   };
 
-  // 获取记录状态
-  const getRecordStatus = (record: MvrData) => {
-    if (record.convictions && record.convictions.length > 0) {
-      return 'warning';
-    }
-    if (record.status && record.status !== 'LICENCED') {
-      return 'error';
-    }
-    return 'success';
-  };
 
-  // 获取状态图标
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'error':
-        return <AlertTriangle className="w-4 h-4 text-red-600" />;
-      case 'warning':
-        return <AlertTriangle className="w-4 h-4 text-yellow-600" />;
-      default:
-        return <CheckCircle className="w-4 h-4 text-green-600" />;
-    }
-  };
-
-  // 获取状态颜色
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'error':
-        return 'border-red-200 bg-red-50';
-      case 'warning':
-        return 'border-yellow-200 bg-yellow-50';
-      default:
-        return 'border-green-200 bg-green-50';
-    }
-  };
   return (
     <div className="space-y-6">
-      {/* 全部展开/收起按钮 */}
+      {/* 展开/收起所有按钮 */}
       <div className="flex justify-between items-center">
-        <h3 className="text-lg font-semibold text-gray-900">
-          MVR Records ({data.records.length})
-        </h3>
-        <Button 
-          variant="outline" 
-          size="sm" 
+        <h3 className="font-semibold text-gray-900">MVR Records ({data.records.length})</h3>
+        <button
           onClick={toggleAll}
+          className="text-sm text-blue-600 hover:text-blue-800 flex items-center space-x-1"
         >
           {showAll ? (
             <>
-              <ChevronUp className="w-4 h-4 mr-2" />
-              Collapse All
+              <ChevronUp className="w-4 h-4" />
+              <span>Collapse All</span>
             </>
           ) : (
             <>
-              <ChevronDown className="w-4 h-4 mr-2" />
-              Expand All
+              <ChevronDown className="w-4 h-4" />
+              <span>Expand All</span>
             </>
           )}
-        </Button>
+        </button>
       </div>
 
-      {/* MVR记录列表 */}
-      <div className="space-y-4">
+      {/* 记录列表 */}
+      <div className="space-y-3">
         {data.records.map((record, index) => {
           const isExpanded = expandedRecords.has(index);
-          const status = getRecordStatus(record);
+          const hasConvictions = record.convictions && record.convictions.length > 0;
           
           return (
-            <Card key={index} className={`${getStatusColor(status)} border-l-4`}>
-              <CardHeader 
-                className="cursor-pointer hover:bg-gray-50 transition-colors"
+            <div key={index} className="border border-gray-200 rounded-lg overflow-hidden">
+              {/* 记录头部 */}
+              <div
+                className={`p-4 cursor-pointer transition-colors ${
+                  isExpanded ? 'bg-blue-50 border-b border-blue-200' : 'hover:bg-gray-50'
+                }`}
                 onClick={() => toggleRecord(index)}
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-3">
-                    {getStatusIcon(status)}
+                    <FileText className="w-5 h-5 text-blue-600" />
                     <div>
-                      <CardTitle className="text-lg">
-                        MVR Record #{index + 1}
-                      </CardTitle>
-                      <div className="text-sm text-gray-600 space-y-1">
-                        {record.file_name && (
-                          <div>File: {record.file_name}</div>
-                        )}
-                        <div>
-                          <strong>Name:</strong> {record.name || 'N/A'} |{' '}
-                          <strong>License:</strong> {record.licence_number || 'N/A'} |{' '}
-                          <strong>Status:</strong> {record.status || 'N/A'}
-                        </div>
-                        {record.convictions && record.convictions.length > 0 && (
-                          <div className="text-red-600">
-                            {record.convictions.length} conviction(s)
-                          </div>
-                        )}
+                      <div className="font-medium text-gray-900">
+                        {record.name || 'Unknown Name'}
+                      </div>
+                      <div className="text-sm text-gray-500">
+                        {record.file_name || `MVR Record ${index + 1}`}
                       </div>
                     </div>
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                      record.status === 'LICENCED' ? 'bg-green-100 text-green-800' :
-                      record.status === 'EXPIRED' ? 'bg-yellow-100 text-yellow-800' :
-                      record.status === 'SUSPENDED' ? 'bg-red-100 text-red-800' :
-                      record.status === 'UNLICENSED' ? 'bg-red-100 text-red-800' :
-                      'bg-gray-100 text-gray-800'
-                    }`}>
-                      {record.status || 'N/A'}
-                    </span>
-                    {isExpanded ? (
-                      <ChevronUp className="w-5 h-5 text-gray-400" />
-                    ) : (
-                      <ChevronDown className="w-5 h-5 text-gray-400" />
-                    )}
+                  
+                  <div className="flex items-center space-x-4">
+                    {/* 状态指示器 */}
+                    <div className="flex items-center space-x-2">
+                      <div className={`flex items-center space-x-1 ${
+                        record.status === 'LICENCED' ? 'text-green-600' : 'text-red-600'
+                      }`}>
+                        <CheckCircle className="w-4 h-4" />
+                        <span className="text-xs">{record.status || 'N/A'}</span>
+                      </div>
+                      {hasConvictions && (
+                        <div className="flex items-center space-x-1 text-red-600">
+                          <AlertTriangle className="w-4 h-4" />
+                          <span className="text-xs">Convictions</span>
+                        </div>
+                      )}
+                    </div>
+                    
+                    <ChevronRight className={`w-5 h-5 text-gray-400 transform transition-transform ${
+                      isExpanded ? 'rotate-90' : ''
+                    }`} />
                   </div>
                 </div>
-              </CardHeader>
+              </div>
+
+              {/* 记录详情 */}
               {isExpanded && (
-                <CardContent className="pt-0">
-                  <div className="border-t pt-4">
-                    <SingleMvrRecord record={record} index={index} showFileName={true} />
-                  </div>
-                </CardContent>
+                <div className="p-4 bg-white">
+                  <SingleMvrRecord record={record} index={index} showFileName={true} />
+                </div>
               )}
-            </Card>
+            </div>
           );
         })}
       </div>

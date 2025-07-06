@@ -16,7 +16,6 @@ export default function QuoteUploader({ documentState, onFileUpload }: QuoteUplo
       title="Quote Documents"
       description="Insurance quote information"
       icon={Calculator}
-      color="purple"
       inputId="quote-upload"
     />
   );
