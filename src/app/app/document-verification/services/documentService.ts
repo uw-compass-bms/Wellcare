@@ -1,4 +1,4 @@
-import { DocumentType, CachedFile } from '../types';
+import { DocumentType, CachedFile, CachedFileWithId } from '../types';
 
 export class DocumentService {
   // API端点映射
@@ -7,6 +7,12 @@ export class DocumentService {
     autoplus: '/api/document-extraction/autoplus',
     quote: '/api/document-extraction/quote',
     application: '/api/document-extraction/application'
+  };
+
+  // 多文件API端点映射
+  private static multiFileEndpoints = {
+    mvr: '/api/document-extraction/mvr',
+    autoplus: '/api/document-extraction/autoplus'
   };
 
   // 处理单个文档
@@ -59,5 +65,83 @@ export class DocumentService {
       fileType: file.type,
       b64data: b64data
     };
+  }
+
+  // 生成文件ID
+  static generateFileId(): string {
+    return Date.now().toString(36) + Math.random().toString(36).substr(2);
+  }
+
+  // 创建带ID的缓存文件对象
+  static async createCachedFileWithId(file: File): Promise<CachedFileWithId> {
+    const cachedFile = await this.createCachedFile(file);
+    return {
+      ...cachedFile,
+      fileId: this.generateFileId()
+    };
+  }
+
+  // 处理多文件MVR
+  static async processMultiMvrFiles(files: CachedFileWithId[]) {
+    const payload = {
+      files: files.map(file => ({
+        b64data: file.b64data,
+        fileName: file.fileName,
+        fileSize: file.fileSize,
+        fileType: file.fileType,
+        fileId: file.fileId
+      }))
+    };
+
+    const response = await fetch(this.multiFileEndpoints.mvr, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const result = await response.json();
+    if (!result.success) {
+      throw new Error(result.error || 'Processing failed');
+    }
+
+    return result.data;
+  }
+
+  // 处理多文件Auto+
+  static async processMultiAutoPlusFiles(files: CachedFileWithId[]) {
+    const payload = {
+      files: files.map(file => ({
+        b64data: file.b64data,
+        fileName: file.fileName,
+        fileSize: file.fileSize,
+        fileType: file.fileType,
+        fileId: file.fileId
+      }))
+    };
+
+    const response = await fetch(this.multiFileEndpoints.autoplus, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const result = await response.json();
+    if (!result.success) {
+      throw new Error(result.error || 'Processing failed');
+    }
+
+    return result.data;
   }
 } 

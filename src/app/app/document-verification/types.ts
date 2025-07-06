@@ -15,6 +15,22 @@ export interface MvrData extends BaseDocumentData {
   status: string | null;
   conditions: Array<{ date: string | null; description: string }> | null;
   convictions: Array<{ date: string | null; description: string }> | null;
+  // 多文件支持 - 添加文件识别字段
+  file_name?: string;
+  file_id?: string;
+}
+
+// MVR多文件数据类型 - 兼容现有MvrData结构
+export interface MvrMultiData extends BaseDocumentData {
+  gender: string | null;
+  issue_date: string | null;
+  expiry_date: string | null;
+  class: string | null;
+  status: string | null;
+  conditions: Array<{ date: string | null; description: string }> | null;
+  convictions: Array<{ date: string | null; description: string }> | null;
+  // 多文件记录
+  records: Array<MvrData>;
 }
 
 // Auto+数据类型
@@ -28,6 +44,15 @@ export interface AutoPlusData extends BaseDocumentData {
     total_claim_amount: string;
     coverage_types: string | null;
   }> | null;
+  // 多文件支持 - 添加文件识别字段
+  file_name?: string;
+  file_id?: string;
+}
+
+// Auto+多文件数据类型 - 兼容现有AutoPlusData结构
+export interface AutoPlusMultiData extends AutoPlusData {
+  // 多文件记录
+  records: Array<AutoPlusData>;
 }
 
 // Quote多车辆多驾驶员数据类型
@@ -387,7 +412,7 @@ export interface ApplicationData extends BaseDocumentData {
 export type DocumentType = 'mvr' | 'autoplus' | 'quote' | 'application';
 
 // 联合数据类型
-export type DocumentData = MvrData | AutoPlusData | QuoteData | ApplicationData;
+export type DocumentData = MvrData | MvrMultiData | AutoPlusData | AutoPlusMultiData | QuoteData | ApplicationData;
 
 // 已删除验证错误类型 - 不再需要
 
@@ -400,6 +425,19 @@ export interface CachedFile {
   b64data: string;
 }
 
+// 多文件缓存类型（用于MVR）
+export interface CachedFileWithId extends CachedFile {
+  fileId: string;
+}
+
+// 多文件上传状态
+export interface MultiFileState {
+  files: { [fileId: string]: CachedFileWithId };
+  processingFiles: Set<string>;
+  processedFiles: Set<string>;
+  errors: { [fileId: string]: string };
+}
+
 // 文档状态类型
 export interface DocumentState {
   data: DocumentData | null;
@@ -408,4 +446,7 @@ export interface DocumentState {
   uploaded: boolean;
   cached: boolean; // 是否已缓存文件但未处理
   cachedFile: CachedFile | null; // 缓存的文件数据
+  // 多文件支持（仅MVR使用）
+  multiFileState?: MultiFileState;
+  isMultiFile?: boolean; // 标识是否启用多文件模式
 } 

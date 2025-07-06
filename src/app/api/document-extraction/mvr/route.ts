@@ -20,6 +20,25 @@ interface MvrData {
     date: string | null;
     description: string;
   }> | null;
+  // 多文件支持字段
+  file_name?: string;
+  file_id?: string;
+}
+
+// 多文件MVR数据类型
+interface MvrMultiData extends MvrData {
+  records: Array<MvrData>;
+}
+
+// 多文件处理请求类型
+interface MultiFileRequest {
+  files: Array<{
+    fileId: string;
+    fileName: string;
+    fileSize: number;
+    fileType: string;
+    b64data: string;
+  }>;
 }
 
 // 文件类型检测和编码函数
@@ -294,6 +313,133 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ 
       success: false, 
       error: '文件处理失败，请检查文件格式',
+      details: process.env.NODE_ENV === 'development' ? 
+        (error instanceof Error ? error.message : 'Unknown error') : undefined
+    }, { status: 500 });
+  }
+}
+
+// 新增：多文件处理端点
+export async function PUT(request: NextRequest) {
+  try {
+    // 检查用户认证状态
+    const { userId } = await auth();
+    if (!userId) {
+      return NextResponse.json({ 
+        success: false,
+        error: 'Unauthorized access' 
+      }, { status: 401 });
+    }
+
+    // 解析多文件请求
+    const body: MultiFileRequest = await request.json();
+    const { files } = body;
+    
+    if (!files || files.length === 0) {
+      return NextResponse.json({ 
+        success: false,
+        error: 'No files provided' 
+      }, { status: 400 });
+    }
+
+    console.log(`开始处理多文件MVR提取请求，共 ${files.length} 个文件...`);
+
+    const results: Array<MvrData> = [];
+    const errors: Array<{ fileId: string; fileName: string; error: string }> = [];
+
+    // 逐个处理文件
+    for (const file of files) {
+      try {
+        console.log(`处理文件: ${file.fileName} (${file.fileId})`);
+        
+        // 检测文件类型
+        const detectedType = b64dataIsPdf(file.b64data) ? "pdf" : "image";
+        console.log(`检测到文件类型: ${detectedType}`);
+        
+        // 调用AI处理
+        const aiResult = await extractDataWithAI(file.b64data);
+        
+        // 处理API错误
+        if (!aiResult.response || aiResult.response.error) {
+          throw new Error(`AI处理失败: ${JSON.stringify(aiResult.response)}`);
+        }
+        
+        if (!aiResult.text) {
+          throw new Error('AI未返回处理结果');
+        }
+        
+        // 解析AI返回的JSON
+        const extractedData = parseAIResponse(aiResult.text);
+        
+        if (!extractedData) {
+          throw new Error('无法解析AI返回的JSON数据');
+        }
+        
+        // 添加文件标识信息
+        const recordWithFileInfo: MvrData = {
+          ...extractedData,
+          file_name: file.fileName,
+          file_id: file.fileId
+        };
+        
+        results.push(recordWithFileInfo);
+        console.log(`文件 ${file.fileName} 处理成功`);
+        
+        // 添加延时以避免API限制
+        if (files.length > 1) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+        
+      } catch (error) {
+        console.error(`处理文件 ${file.fileName} 时出错:`, error);
+        errors.push({
+          fileId: file.fileId,
+          fileName: file.fileName,
+          error: error instanceof Error ? error.message : '处理失败'
+        });
+      }
+    }
+
+    // 构建多文件数据结构
+    const multiData: MvrMultiData = {
+      // 使用第一个成功记录的基本信息作为默认值
+      ...(results[0] || {
+        licence_number: null,
+        name: null,
+        gender: null,
+        date_of_birth: null,
+        address: null,
+        issue_date: null,
+        expiry_date: null,
+        class: null,
+        status: null,
+        conditions: null,
+        convictions: null
+      }),
+      records: results
+    };
+
+    const response = {
+      success: true,
+      data: multiData,
+      metadata: {
+        total_files: files.length,
+        successful_files: results.length,
+        failed_files: errors.length,
+        model_used: "google/gemini-2.5-flash-preview",
+        processing_time: new Date().toISOString(),
+        ...(errors.length > 0 && { errors })
+      }
+    };
+
+    return NextResponse.json(response);
+
+  } catch (error) {
+    console.error('多文件MVR处理出错:', error);
+    
+    return NextResponse.json({ 
+      success: false, 
+      error: '多文件处理失败，请检查文件格式',
       details: process.env.NODE_ENV === 'development' ? 
         (error instanceof Error ? error.message : 'Unknown error') : undefined
     }, { status: 500 });

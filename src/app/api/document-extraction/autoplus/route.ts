@@ -20,6 +20,9 @@ interface AutoPlusData {
     total_claim_amount: string;
     coverage_types: string | null;
   }> | null;
+  // 多文件支持字段
+  file_name?: string;
+  file_id?: string;
 }
 
 // 文件类型检测和编码函数
@@ -294,6 +297,128 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ 
       success: false, 
       error: '文件处理失败，请检查文件格式',
+      details: process.env.NODE_ENV === 'development' ? 
+        (error instanceof Error ? error.message : 'Unknown error') : undefined
+    }, { status: 500 });
+  }
+}
+
+// 多文件处理API
+export async function PUT(request: NextRequest) {
+  try {
+    // 检查用户认证状态
+    const { userId } = await auth();
+    if (!userId) {
+      return NextResponse.json({ 
+        success: false,
+        error: 'Unauthorized access' 
+      }, { status: 401 });
+    }
+
+    const body = await request.json();
+    const { files } = body;
+    
+    if (!files || !Array.isArray(files) || files.length === 0) {
+      return NextResponse.json({ 
+        success: false,
+        error: 'No files provided' 
+      }, { status: 400 });
+    }
+
+    console.log(`开始处理Auto+多文件提取请求... 共${files.length}个文件`);
+
+    const results: AutoPlusData[] = [];
+    const processingErrors: string[] = [];
+
+    // 依次处理每个文件
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const { b64data, fileName, fileSize, fileType, fileId } = file;
+      
+      if (!b64data) {
+        processingErrors.push(`文件 ${fileName} 缺少文件数据`);
+        continue;
+      }
+
+      try {
+        console.log(`处理文件 ${i + 1}/${files.length}: ${fileName}`);
+        
+        const detectedType = b64dataIsPdf(b64data) ? "pdf" : "image";
+        console.log(`检测到文件类型: ${detectedType}`);
+        
+        const aiResult = await extractDataWithAI(b64data);
+        
+        if (!aiResult.response || aiResult.response.error) {
+          throw new Error(`OpenRouter API error: ${JSON.stringify(aiResult.response)}`);
+        }
+        
+        if (!aiResult.text) {
+          throw new Error('No response text from AI');
+        }
+        
+        const result = parseAIResponse(aiResult.text);
+        
+        if (!result) {
+          throw new Error('Failed to parse AI response as JSON');
+        }
+        
+        // 添加文件元数据
+        const resultWithMetadata: AutoPlusData = {
+          ...result,
+          file_name: fileName,
+          file_id: fileId
+        };
+        
+        results.push(resultWithMetadata);
+        console.log(`成功处理文件: ${fileName}`);
+        
+        // 在文件之间添加延迟，避免API限制
+        if (i < files.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+        
+      } catch (error) {
+        console.error(`处理文件 ${fileName} 时出错:`, error);
+        processingErrors.push(`文件 ${fileName} 处理失败: ${error instanceof Error ? error.message : '未知错误'}`);
+      }
+    }
+
+    // 如果所有文件都失败了
+    if (results.length === 0) {
+      return NextResponse.json({ 
+        success: false,
+        error: '所有文件处理失败',
+        details: processingErrors
+      }, { status: 500 });
+    }
+
+    // 构建多文件数据结构
+    const multiData = {
+      // 继承第一个成功文件的基本信息
+      ...results[0],
+      // 多文件记录
+      records: results
+    };
+
+    // 返回成功响应
+    return NextResponse.json({ 
+      success: true, 
+      data: multiData,
+      metadata: {
+        total_files: files.length,
+        successful_files: results.length,
+        failed_files: processingErrors.length,
+        processing_errors: processingErrors.length > 0 ? processingErrors : undefined,
+        model_used: "google/gemini-2.5-flash-preview"
+      }
+    });
+
+  } catch (error) {
+    console.error('处理Auto+多文件提取时出错:', error);
+    
+    return NextResponse.json({ 
+      success: false, 
+      error: '多文件处理失败',
       details: process.env.NODE_ENV === 'development' ? 
         (error instanceof Error ? error.message : 'Unknown error') : undefined
     }, { status: 500 });
