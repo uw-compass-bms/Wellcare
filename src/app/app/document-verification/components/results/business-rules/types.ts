@@ -22,82 +22,20 @@ export interface NewDriverResult {
   reason?: string;
 }
 
-// G1起始日期验证结果
+// G1起始日期验证结果 - 简化版
 export interface G1StartDateResult {
-  // 原有的单驾驶员字段保持兼容
-  mvr_calculated_g1_date?: string | null;
-  calculation_method?: string;
-  birth_date?: string | null;
-  expiry_date?: string | null;
-  issue_date?: string | null;
-  quote_g1_date?: string | null;
-  quote_g2_date?: string | null;
-  quote_g_date?: string | null;
-  first_insurance_date?: string | null;
-  ten_year_rule_triggered?: boolean;
-  g1_dates_match?: boolean | null;
-  license_insurance_years_diff?: number | null;
-  
-  // 新增：多驾驶员验证结果
-  driver_validations?: Array<{
-    driver_name: string;
-    driver_license_number?: string | null;
-    
-    // MVR匹配结果
-    mvr_matches?: Array<{
-      mvr_record_id?: string;
-      mvr_file_name?: string;
-      license_number_match: boolean;
-      name_match: boolean;
-      birth_date_match: boolean;
-      calculated_g1_date?: string | null;
-      calculation_method?: string;
-      birth_date?: string | null;
-      expiry_date?: string | null;
-      issue_date?: string | null;
-    }>;
-    
-    // Auto+匹配结果
-    autoplus_matches?: Array<{
-      autoplus_record_id?: string;
-      autoplus_file_name?: string;
-      license_number_match: boolean;
-      name_match: boolean;
-      first_insurance_date?: string | null;
-    }>;
-    
-    // Quote中的驾照日期
-    quote_license_dates?: {
-      date_g1?: string | null;
-      date_g2?: string | null;
-      date_g?: string | null;
-      date_insured?: string | null;
-      date_with_company?: string | null;
-    };
-    
-    // 该驾驶员的验证结果
-    validation_result: {
-      g1_calculation_successful: boolean;
-      g1_dates_consistent: boolean;
-      ten_year_rule_triggered: boolean;
-      license_insurance_years_diff?: number | null;
-      issues: string[];
-      warnings: string[];
-      recommendations: string[];
-    };
-  }>;
-  
-  // 总体统计
-  summary?: {
-    total_drivers: number;
-    total_mvr_records: number;
-    total_autoplus_records: number;
-    drivers_with_issues: number;
-    drivers_with_warnings: number;
-    unmatched_drivers: number;
-    unmatched_mvr_records: number;
-    unmatched_autoplus_records: number;
-  };
+  // MVR计算结果
+  mvr_calculated_g1_date: string | null;
+  calculation_method: string;
+  birth_date: string | null;
+  expiry_date: string | null;
+  issue_date: string | null;
+  birth_month_day: string | null;
+  expiry_month_day: string | null;
+  // Quote对比结果
+  quote_g1_date: string | null;
+  dates_match: boolean;
+  date_difference_days: number | null;
 }
 
 // 车辆年龄与保险覆盖验证结果

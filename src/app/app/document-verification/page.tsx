@@ -14,8 +14,7 @@ export default function DocumentVerification() {
     processDocuments,
     // 多文件相关功能
     handleMultiFileUpload,
-    handleFileDelete,
-    handleFileReplace
+    handleFileDelete
   } = useDocumentProcessing();
 
   return (
@@ -32,7 +31,6 @@ export default function DocumentVerification() {
         onFileUpload={handleFileUpload}
         onMultiFileUpload={(files, type) => handleMultiFileUpload(files, type)}
         onFileDelete={(fileId, type) => handleFileDelete(fileId, type)}
-        onFileReplace={(fileId, newFile, type) => handleFileReplace(fileId, newFile, type)}
       />
 
       {/* 处理控制面板 */}

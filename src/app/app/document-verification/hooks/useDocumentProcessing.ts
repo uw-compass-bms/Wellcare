@@ -45,8 +45,6 @@ export function useDocumentProcessing() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingStep, setProcessingStep] = useState<DocumentType | null>(null);
 
-
-
   // 支持多文件的文档类型
   const MULTI_FILE_TYPES: DocumentType[] = ['mvr', 'autoplus'];
 
@@ -147,9 +145,8 @@ export function useDocumentProcessing() {
     }
   };
 
-  // 删除文件（MVR和AutoPlus使用）
-  const handleFileDelete = (fileId: string, type: DocumentType = 'mvr') => {
-    
+  // 删除多文件（MVR和AutoPlus使用）
+  const handleMultiFileDelete = (fileId: string, type: DocumentType) => {
     setDocuments(prev => {
       const newFiles = { ...prev[type].multiFileState!.files };
       delete newFiles[fileId];
@@ -179,48 +176,29 @@ export function useDocumentProcessing() {
     });
   };
 
-  // 替换文件（MVR和AutoPlus使用）
-  const handleFileReplace = async (fileId: string, newFile: File, type: DocumentType = 'mvr') => {
-    
-    try {
-      const cachedFile = await DocumentService.createCachedFile(newFile);
-      const cachedFileWithId: CachedFileWithId = {
-        ...cachedFile,
-        fileId
-      };
+  // 删除单文件（Quote和Application使用）
+  const handleSingleFileDelete = (type: DocumentType) => {
+    setDocuments(prev => ({
+      ...prev,
+      [type]: {
+        ...prev[type],
+        cached: false,
+        uploaded: false,
+        data: null,
+        error: null,
+        cachedFile: null
+      }
+    }));
+  };
 
-      setDocuments(prev => ({
-        ...prev,
-        [type]: {
-          ...prev[type],
-          multiFileState: {
-            ...prev[type].multiFileState!,
-            files: {
-              ...prev[type].multiFileState!.files,
-              [fileId]: cachedFileWithId
-            },
-            // 清除该文件的错误和处理状态
-            errors: Object.fromEntries(Object.entries(prev[type].multiFileState!.errors).filter(([id]) => id !== fileId)),
-            processingFiles: new Set([...prev[type].multiFileState!.processingFiles].filter(id => id !== fileId)),
-            processedFiles: new Set([...prev[type].multiFileState!.processedFiles].filter(id => id !== fileId))
-          }
-        }
-      }));
-
-    } catch (err) {
-      setDocuments(prev => ({
-        ...prev,
-        [type]: {
-          ...prev[type],
-          multiFileState: {
-            ...prev[type].multiFileState!,
-            errors: {
-              ...prev[type].multiFileState!.errors,
-              [fileId]: err instanceof Error ? err.message : '文件替换失败'
-            }
-          }
-        }
-      }));
+  // 统一的文件删除接口
+  const handleFileDelete = (fileId: string | undefined, type: DocumentType) => {
+    if (MULTI_FILE_TYPES.includes(type) && fileId) {
+      // 多文件删除
+      handleMultiFileDelete(fileId, type);
+    } else {
+      // 单文件删除
+      handleSingleFileDelete(type);
     }
   };
 
@@ -259,12 +237,6 @@ export function useDocumentProcessing() {
       throw err;
     }
   };
-
-
-
-
-
-
 
   // Validate all extracted documents (local business rules)
   const validateDocuments = () => {
@@ -429,7 +401,6 @@ export function useDocumentProcessing() {
     processDocuments,
     // 多文件相关功能
     handleMultiFileUpload,
-    handleFileDelete,
-    handleFileReplace
+    handleFileDelete
   };
 } 

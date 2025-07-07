@@ -94,9 +94,15 @@ function encodeBase64ToData(base64data: string): {
 function getMvrPrompt(): string {
   return `You are an expert OCR and data extraction agent. Analyze the provided document (PDF or image) of an MVR (Motor Vehicle Record) from Ontario, Canada. Extract the following fields and return the data in a structured JSON format.
 
+**CRITICAL DATE FORMAT INSTRUCTIONS:**
+- MVR documents from Ontario use DD/MM/YYYY format (day/month/year)
+- You MUST convert ALL dates from DD/MM/YYYY to YYYY-MM-DD format
+- Examples: "15/06/2022" becomes "2022-06-15", "31/12/2023" becomes "2023-12-31"
+- Pay special attention to day/month order - do NOT confuse it with MM/DD/YYYY format
+
+
 **Important Instructions:**
 - All field names in the JSON output must be in snake_case format
-- All dates must be converted to 'YYYY-MM-DD' format. If a date is DD/MM/YYYY, convert it
 - Return arrays for conditions and convictions with proper structure
 
 **Fields to extract:**
@@ -104,21 +110,22 @@ function getMvrPrompt(): string {
 - **name**: The full name of the driver. Extract in "LASTNAME, FIRSTNAME" format (e.g., "SMITH, JOHN").
 - **gender**: The gender of the driver (M/F).
 - **address**: The driver's full address. Look for the complete address including city and postal code.
-- **expiry_date**: The expiry date of the licence, in YYYY-MM-DD format.
-- **date_of_birth**: The date of birth of the driver, in YYYY-MM-DD format.
+- **expiry_date**: The expiry date of the licence. Source format is DD/MM/YYYY, convert to YYYY-MM-DD format.
+- **date_of_birth**: The date of birth of the driver. Source format is DD/MM/YYYY, convert to YYYY-MM-DD format.
 - **class**: The class of the licence (e.g., G, G2).
 - **status**: The current status of the licence. This is CRITICAL - extract exactly as shown: "LICENCED", "EXPIRED", "SUSPENDED", "UNLICENSED", etc. This field determines license validity.
-- **issue_date**: The original issue date of the licence, in YYYY-MM-DD format.
+- **issue_date**: The original issue date of the licence. Source format is DD/MM/YYYY, convert to YYYY-MM-DD format.
 - **conditions**: An array of objects for items under "CONDITIONS AND ENDORSEMENTS". Each object should have:
-  - date: The date if available (YYYY-MM-DD format) or null
+  - date: The date if available (source format DD/MM/YYYY, convert to YYYY-MM-DD format) or null
   - description: The condition description
   **IGNORE the following text patterns:** "REQUIRES CORRECTIVE LENSES", "CORRECTIVE LENSES", "SEARCH SUCCESSFUL - NO PUBLIC RECORD" - these are not actual license conditions.
 - **convictions**: An array of objects for items under "CONVICTIONS, DISCHARGES AND OTHER ACTIONS". Each object should have:
-  - date: The conviction date (YYYY-MM-DD format) - USE THE DATE FROM THE "DATE" COLUMN OR THE DATE LISTED BELOW THE CONVICTION, NOT the date mentioned in the description text
+  - date: The conviction date (source format DD/MM/YYYY, convert to YYYY-MM-DD format) - USE THE DATE FROM THE "DATE" COLUMN OR THE DATE LISTED BELOW THE CONVICTION, NOT the date mentioned in the description text
   - description: The conviction description (e.g., "SPEEDING", "DISOBEY LEGAL SIGN", etc.)
 
 **CRITICAL for Convictions:**
 - For conviction dates, use the date from the structured "DATE" column or the date listed below the conviction entry
+- Remember: conviction dates are in DD/MM/YYYY format, convert to YYYY-MM-DD
 - Do NOT use dates that appear within the description text
 - Focus on the actual violation description (e.g., "SPEEDING", "DISOBEY LEGAL SIGN")
 
@@ -140,6 +147,11 @@ function getMvrPrompt(): string {
     { "date": "2022-06-15", "description": "SPEEDING - 80 KM/H in a 60 KM/H ZONE" }
   ]
 }
+
+**Date Conversion Examples:**
+- If you see "15/06/2022" in the MVR document, convert it to "2022-06-15" (15th day of June)
+- If you see "31/12/2023" in the MVR document, convert it to "2023-12-31" (31st day of December)
+- If you see "05/03/2022" in the MVR document, convert it to "2022-03-05" (5th day of March）
 
 If no conditions or convictions are found, return empty arrays []. If a field is not found, return null for that field. Return only the JSON string, with no additional formatting or markdown.`;
 }
