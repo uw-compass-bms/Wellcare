@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { FileText, BarChart3, Users, Settings, CheckCircle, ArrowRight, Star } from 'lucide-react';
+import { FileText, BarChart3, Users, Settings, CheckCircle, ArrowRight } from 'lucide-react';
 
 export default function LandingPage() {
   // 核心功能特性
@@ -44,24 +44,6 @@ export default function LandingPage() {
     'Secure cloud-based storage',
     'Real-time collaboration features',
     '24/7 customer support'
-  ];
-
-  // 客户评价
-  const testimonials = [
-    {
-      name: 'Sarah Johnson',
-      role: 'Operations Manager',
-      company: 'InsureTech Solutions',
-      content: 'UW Compass transformed our document processing workflow. What used to take hours now takes minutes.',
-      rating: 5
-    },
-    {
-      name: 'Mike Chen',
-      role: 'Senior Underwriter', 
-      company: 'Premium Insurance Co.',
-      content: 'The accuracy and speed of document extraction is incredible. It has significantly improved our efficiency.',
-      rating: 5
-    }
   ];
 
   return (
@@ -158,9 +140,6 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
             <div>
-              <h2 className="text-3xl font-bold text-gray-900 mb-6">
-                Why Choose UW Compass?
-              </h2>
               <p className="text-lg text-gray-600 mb-8">
                 Our platform combines cutting-edge AI technology with industry-specific 
                 expertise to deliver unmatched document processing capabilities.
@@ -190,38 +169,6 @@ export default function LandingPage() {
                 </div>
               </div>
             </div>
-          </div>
-        </div>
-      </section>
-
-      {/* 客户评价 */}
-      <section id="testimonials" className="py-20 bg-gray-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl font-bold text-gray-900 mb-4">
-              What Our Customers Say
-            </h2>
-            <p className="text-xl text-gray-600">
-              Don&apos;t just take our word for it
-            </p>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            {testimonials.map((testimonial, index) => (
-              <Card key={index} className="p-6">
-                <CardContent className="pt-0">
-                  <div className="flex mb-4">
-                    {[...Array(testimonial.rating)].map((_, i) => (
-                      <Star key={i} className="w-5 h-5 text-yellow-400 fill-current" />
-                    ))}
-                  </div>
-                  <p className="text-gray-700 mb-4 italic">&ldquo;{testimonial.content}&rdquo;</p>
-                  <div>
-                    <div className="font-semibold text-gray-900">{testimonial.name}</div>
-                    <div className="text-sm text-gray-600">{testimonial.role}, {testimonial.company}</div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
           </div>
         </div>
       </section>
