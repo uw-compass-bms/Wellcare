@@ -2,7 +2,7 @@
 import React from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Loader2, Play, CheckSquare, FileCheck } from 'lucide-react';
+import { Loader2, CheckSquare, FileCheck } from 'lucide-react';
 import { DocumentType, DocumentState } from '../types';
 
 interface ProcessingControlPanelProps {

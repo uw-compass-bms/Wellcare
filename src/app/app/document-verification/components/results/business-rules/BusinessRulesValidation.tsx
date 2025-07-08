@@ -79,7 +79,7 @@ export default function BusinessRulesValidation({
             <span className="text-sm font-normal text-gray-500">(Ready)</span>
           </CardTitle>
           <CardDescription>
-            Click "Validate & Cross-Check" to run automated validation of business logic and compliance requirements
+            Click &quot;Validate &amp; Cross-Check&quot; to run automated validation of business logic and compliance requirements
           </CardDescription>
         </CardHeader>
         

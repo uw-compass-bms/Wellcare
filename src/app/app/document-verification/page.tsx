@@ -15,7 +15,6 @@ export default function DocumentVerification() {
     isValidating,
     validationStep,
     hasValidated,
-    validationResults,
     validationKey,
     // Functions
     handleFileUpload,

@@ -21,7 +21,6 @@ export default function ResultsSection({
   isProcessing, 
   processingStep,
   isValidating = false,
-  validationStep = null,
   hasValidated = false,
   validationKey = 0
 }: ResultsSectionProps) {

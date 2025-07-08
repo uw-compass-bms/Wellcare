@@ -49,7 +49,7 @@ export function useDocumentProcessing() {
   const [isValidating, setIsValidating] = useState(false);
   const [validationStep, setValidationStep] = useState<string | null>(null);
   const [hasValidated, setHasValidated] = useState(false);
-  const [validationResults, setValidationResults] = useState<Record<string, any>>({});
+  const [validationResults, setValidationResults] = useState<Record<string, unknown>>({});
   const [validationKey, setValidationKey] = useState(0);
 
   // 支持多文件的文档类型
