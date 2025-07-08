@@ -107,12 +107,20 @@ function getMvrPrompt(): string {
 
 **Fields to extract:**
 - **licence_number**: The driver's licence number. Must be exactly 1 letter followed by 14 digits with NO spaces, hyphens, or other separators (e.g., "A12345678901234"). If you see a licence number with hyphens like "W0418-74109-50504", remove all hyphens and format it as "W04187410950504".
-- **name**: The full name of the driver. **CRITICAL NAME EXTRACTION**:
+- **name**: The full name of the driver. **CRITICAL NAME EXTRACTION - READ CAREFULLY**:
   * **Location**: The name appears immediately AFTER the licence number in the MVR document
-  * **Source Format**: The name in MVR documents is already in "LASTNAME, FIRSTNAME" format (e.g., "SMITH, JOHN")
-  * **Output Format**: Extract exactly as shown and output in "LASTNAME, FIRSTNAME" format in ALL CAPS
-  * **Example**: If you see "Smith, John" in the document, output "SMITH, JOHN"
-  * **Important**: Do NOT reverse the name order - MVR documents already have the correct last name first format
+  * **Source Format**: MVR documents use "LASTNAME,FIRSTNAME" format with a COMMA separator
+  * **Format Rules**: 
+    - Text BEFORE the comma = LAST NAME (surname/family name)
+    - Text AFTER the comma = FIRST NAME (given name)
+    - Example: "WU,JINTAO" means WU is the last name, JINTAO is the first name
+  * **Output Format**: Extract exactly as shown and output in "LASTNAME,FIRSTNAME" format in ALL CAPS
+  * **Examples**: 
+    - If you see "WU,JINTAO" → output "WU,JINTAO"
+    - If you see "Smith,John" → output "SMITH,JOHN"  
+    - If you see "JOHNSON,MARY" → output "JOHNSON,MARY"
+  * **CRITICAL**: Do NOT reverse the name order. Do NOT put first name first. Always keep LASTNAME,FIRSTNAME format.
+  * **CRITICAL**: The comma separates last name (before comma) from first name (after comma)
 - **gender**: The gender of the driver (M/F).
 - **address**: The driver's full address. Look for the complete address including city and postal code.
 - **expiry_date**: The expiry date of the licence. Source format is DD/MM/YYYY, convert to YYYY-MM-DD format.
@@ -137,7 +145,7 @@ function getMvrPrompt(): string {
 **Example of desired JSON output:**
 {
   "licence_number": "D12345678901234",
-  "name": "DOE, JOHN",
+  "name": "DOE,JOHN",
   "gender": "M",
   "address": "123 Main Street\\nTORONTO, ON\\nL4S 1V2",
   "expiry_date": "2028-12-31",
