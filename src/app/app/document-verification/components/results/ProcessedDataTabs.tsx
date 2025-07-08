@@ -29,23 +29,76 @@ export default function ProcessedDataTabs({
     { type: 'application' as DocumentType, title: 'Application Data', icon: FileCheck, color: 'text-orange-600' }
   ];
 
-  // 获取已上传的文档
-  const uploadedDocs = documentConfigs.filter(config => documents[config.type].uploaded);
+  // 获取有数据的文档 - 支持实时显示
+  const availableDocs = documentConfigs.filter(config => {
+    const docState = documents[config.type];
+    return docState.data || docState.loading || docState.error;
+  });
 
   // 设置默认激活标签
   React.useEffect(() => {
-    if (uploadedDocs.length > 0 && !activeTab) {
-      setActiveTab(uploadedDocs[0].type);
+    if (availableDocs.length > 0 && !activeTab) {
+      setActiveTab(availableDocs[0].type);
     }
-  }, [uploadedDocs, activeTab]);
+  }, [availableDocs, activeTab]);
 
-  if (uploadedDocs.length === 0) return null;
+  if (availableDocs.length === 0) return null;
 
-  // 渲染文档数据
+  // 获取标签图标和状态
+  const getTabIcon = (type: DocumentType) => {
+    const docState = documents[type];
+    const isCurrentlyProcessing = docState.loading || processingStep === type;
+    
+    if (isCurrentlyProcessing) {
+      return <Loader2 className="w-4 h-4 animate-spin" />;
+    }
+    if (docState.error) {
+      return <AlertCircle className="w-4 h-4 text-red-500" />;
+    }
+    
+    const config = documentConfigs.find(c => c.type === type);
+    if (config) {
+      const IconComponent = config.icon;
+      return <IconComponent className={`w-4 h-4 ${config.color}`} />;
+    }
+    
+    return <FileText className="w-4 h-4" />;
+  };
+
+  // 渲染文档数据 - 支持实时显示
   const renderDocumentData = (type: DocumentType) => {
     const documentState = documents[type];
-    if (!documentState.data) return <div>No data available</div>;
+    const isCurrentlyProcessing = documentState.loading || processingStep === type;
+    
+    // 如果正在处理，显示加载状态
+    if (isCurrentlyProcessing) {
+      return (
+        <div className="flex items-center justify-center min-h-[300px]">
+          <div className="text-center">
+            <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-blue-500" />
+            <p className="text-gray-600">
+              {processingStep === type ? 'Re-extracting data...' : 'Extracting data...'}
+            </p>
+            <p className="text-sm text-gray-500 mt-2">Please wait while we process your document</p>
+          </div>
+        </div>
+      );
+    }
+    
+    // 如果没有数据，显示空状态
+    if (!documentState.data) {
+      return (
+        <div className="flex items-center justify-center min-h-[300px]">
+          <div className="text-center text-gray-500">
+            <FileText className="w-12 h-12 mx-auto mb-4 text-gray-400" />
+            <p>No data available</p>
+            <p className="text-sm mt-2">Please upload and process documents to view extracted data</p>
+          </div>
+        </div>
+      );
+    }
 
+    // 渲染实际数据
     switch (type) {
       case 'mvr':
         return <MvrDataDisplay data={documentState.data as MvrData} />;
@@ -72,31 +125,18 @@ export default function ProcessedDataTabs({
         {/* 标签导航 */}
         <div className="flex items-center justify-between mb-6 border-b pb-4">
           <div className="flex space-x-1">
-            {uploadedDocs.map((config) => {
-              const IconComponent = config.icon;
-              const docState = documents[config.type];
-              const isCurrentlyProcessing = processingStep === config.type;
-              const hasError = !!docState.error;
-              
-              return (
-                <Button
-                  key={config.type}
-                  variant={activeTab === config.type ? "default" : "ghost"}
-                  size="sm"
-                  onClick={() => setActiveTab(config.type)}
-                  className="flex items-center space-x-2"
-                >
-                  {isCurrentlyProcessing ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : hasError ? (
-                    <AlertCircle className="w-4 h-4 text-red-500" />
-                  ) : (
-                    <IconComponent className={`w-4 h-4 ${config.color}`} />
-                  )}
-                  <span>{config.title}</span>
-                </Button>
-              );
-            })}
+            {availableDocs.map((config) => (
+              <Button
+                key={config.type}
+                variant={activeTab === config.type ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setActiveTab(config.type)}
+                className="flex items-center space-x-2"
+              >
+                {getTabIcon(config.type)}
+                <span>{config.title}</span>
+              </Button>
+            ))}
           </div>
           
           {/* 重新提取按钮 */}
@@ -151,21 +191,8 @@ export default function ProcessedDataTabs({
               </div>
             )}
             
-            {/* 处理中状态 */}
-            {processingStep === activeTab && (
-              <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                <div className="flex items-center space-x-2">
-                  <Loader2 className="w-5 h-5 text-blue-500 animate-spin" />
-                  <h4 className="text-sm font-medium text-blue-800">Re-extracting Data</h4>
-                </div>
-                <p className="mt-2 text-sm text-blue-700">
-                  Please wait while we re-extract the data from this document...
-                </p>
-              </div>
-            )}
-            
-            {/* 文档数据 */}
-            {!processingStep && renderDocumentData(activeTab)}
+            {/* 文档数据 - 实时显示 */}
+            {renderDocumentData(activeTab)}
           </div>
         )}
       </CardContent>

@@ -22,7 +22,49 @@ export interface NewDriverResult {
   reason?: string;
 }
 
-// G1起始日期验证结果 - 简化版
+// 单个驾驶员的G1验证结果
+export interface SingleDriverG1Result {
+  // 驾驶员识别信息
+  driver_name: string;
+  mvr_licence_number: string | null;
+  quote_licence_number: string | null;
+  match_status: 'exact_match' | 'partial_match' | 'no_match' | 'no_quote_data';
+  
+  // MVR计算结果
+  mvr_calculated_g1_date: string | null;
+  calculation_method: string;
+  birth_date: string | null;
+  expiry_date: string | null;
+  issue_date: string | null;
+  birth_month_day: string | null;
+  expiry_month_day: string | null;
+  
+  // Quote对比结果
+  quote_g1_date: string | null;
+  dates_match: boolean;
+  date_difference_days: number | null;
+  
+  // 该驾驶员的验证状态
+  driver_status: RuleStatus;
+  driver_recommendation: string;
+  driver_details: string;
+}
+
+// 多驾驶员G1验证结果
+export interface MultiDriverG1Result {
+  drivers: SingleDriverG1Result[];
+  summary: {
+    total_drivers: number;
+    matched_drivers: number;
+    passed_validations: number;
+    failed_validations: number;
+    requires_review: number;
+    insufficient_data: number;
+  };
+  overall_status: RuleStatus;
+}
+
+// G1起始日期验证结果 - 保持向后兼容
 export interface G1StartDateResult {
   // MVR计算结果
   mvr_calculated_g1_date: string | null;
@@ -56,7 +98,7 @@ export interface BusinessRuleResult {
   id: string;
   name: string;
   status: RuleStatus;
-  result?: AnnualMileageResult | NewDriverResult | G1StartDateResult | VehicleAgeResult | Record<string, unknown>; // 推算的结果值
+  result?: AnnualMileageResult | NewDriverResult | G1StartDateResult | MultiDriverG1Result | VehicleAgeResult | Record<string, unknown>; // 推算的结果值
   recommendation: string; // 操作建议
   details: string; // 详细说明
   data_sources?: string[]; // 使用的数据源

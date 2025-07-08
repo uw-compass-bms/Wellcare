@@ -16,10 +16,12 @@ export default function ResultsSection({
   isProcessing, 
   processingStep 
 }: ResultsSectionProps) {
-  // Check if any documents have been uploaded
-  const hasUploadedDocuments = Object.values(documents).some(doc => doc.uploaded);
+  // Check if any documents have data, are loading, or have errors - 支持实时显示
+  const hasDocumentActivity = Object.values(documents).some(doc => 
+    doc.data || doc.loading || doc.error
+  );
   
-  if (!hasUploadedDocuments) return null;
+  if (!hasDocumentActivity) return null;
 
   return (
     <div className="space-y-8">

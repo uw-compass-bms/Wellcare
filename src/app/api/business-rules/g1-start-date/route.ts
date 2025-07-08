@@ -1,15 +1,75 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-// 请求数据类型定义 - 简化版
+// MVR数据类型
+interface MvrDriver {
+  name: string | null;
+  licence_number: string | null;
+  date_of_birth: string | null;
+  expiry_date: string | null;
+  issue_date: string | null;
+}
+
+// Quote驾驶员数据类型
+interface QuoteDriver {
+  name: string;
+  licence_number: string;
+  date_g1: string | null;
+}
+
+// 请求数据类型定义 - 支持多驾驶员
 interface G1StartDateValidationRequest {
   mvr?: {
+    records?: MvrDriver[]; // 支持多个MVR记录
+    // 向后兼容的单个记录字段
+    name?: string;
+    licence_number?: string;
     date_of_birth?: string;
     expiry_date?: string;
     issue_date?: string;
   };
   quote?: {
+    drivers?: QuoteDriver[]; // 支持多个驾驶员
+    // 向后兼容的单个驾驶员字段
     date_g1?: string;
   };
+}
+
+// 单个驾驶员验证结果
+interface SingleDriverG1Result {
+  driver_name: string;
+  mvr_licence_number: string | null;
+  quote_licence_number: string | null;
+  match_status: 'exact_match' | 'partial_match' | 'no_match' | 'no_quote_data';
+  
+  mvr_calculated_g1_date: string | null;
+  calculation_method: string;
+  birth_date: string | null;
+  expiry_date: string | null;
+  issue_date: string | null;
+  birth_month_day: string | null;
+  expiry_month_day: string | null;
+  
+  quote_g1_date: string | null;
+  dates_match: boolean;
+  date_difference_days: number | null;
+  
+  driver_status: 'passed' | 'failed' | 'requires_review' | 'insufficient_data';
+  driver_recommendation: string;
+  driver_details: string;
+}
+
+// 多驾驶员验证结果
+interface MultiDriverG1Result {
+  drivers: SingleDriverG1Result[];
+  summary: {
+    total_drivers: number;
+    matched_drivers: number;
+    passed_validations: number;
+    failed_validations: number;
+    requires_review: number;
+    insufficient_data: number;
+  };
+  overall_status: 'passed' | 'failed' | 'requires_review' | 'insufficient_data';
 }
 
 // 业务规则结果类型
@@ -17,8 +77,8 @@ interface BusinessRuleResult {
   id: string;
   name: string;
   status: 'passed' | 'failed' | 'requires_review' | 'insufficient_data';
-  result?: {
-    // MVR计算结果
+  result?: MultiDriverG1Result | {
+    // 向后兼容的单驾驶员结果
     mvr_calculated_g1_date: string | null;
     calculation_method: string;
     birth_date: string | null;
@@ -26,7 +86,6 @@ interface BusinessRuleResult {
     issue_date: string | null;
     birth_month_day: string | null;
     expiry_month_day: string | null;
-    // Quote对比结果
     quote_g1_date: string | null;
     dates_match: boolean;
     date_difference_days: number | null;
@@ -87,72 +146,275 @@ export async function POST(request: NextRequest) {
       }
     };
 
-    // 检查是否有足够的数据
-    if (!mvr?.date_of_birth || !mvr?.expiry_date) {
+    // 驾驶员匹配逻辑
+    const matchDrivers = (mvrDrivers: MvrDriver[], quoteDrivers: QuoteDriver[]): Array<{
+      mvrDriver: MvrDriver | null;
+      quoteDriver: QuoteDriver | null;
+      matchStatus: 'exact_match' | 'partial_match' | 'no_match' | 'no_quote_data';
+    }> => {
+      const matches: Array<{
+        mvrDriver: MvrDriver | null;
+        quoteDriver: QuoteDriver | null;
+        matchStatus: 'exact_match' | 'partial_match' | 'no_match' | 'no_quote_data';
+      }> = [];
+
+      const usedQuoteDrivers = new Set<number>();
+
+      // 为每个MVR驾驶员寻找匹配的Quote驾驶员
+      mvrDrivers.forEach((mvrDriver) => {
+        if (!mvrDriver.name || !mvrDriver.licence_number) {
+          matches.push({
+            mvrDriver,
+            quoteDriver: null,
+            matchStatus: 'no_match'
+          });
+          return;
+        }
+
+        // 寻找精确匹配（姓名和驾照号都匹配）
+        const exactMatch = quoteDrivers.findIndex((quoteDriver, index) => {
+          return !usedQuoteDrivers.has(index) &&
+                 quoteDriver.name === mvrDriver.name &&
+                 quoteDriver.licence_number === mvrDriver.licence_number;
+        });
+
+        if (exactMatch !== -1) {
+          matches.push({
+            mvrDriver,
+            quoteDriver: quoteDrivers[exactMatch],
+            matchStatus: 'exact_match'
+          });
+          usedQuoteDrivers.add(exactMatch);
+          return;
+        }
+
+        // 寻找部分匹配（只有姓名匹配或只有驾照号匹配）
+        const partialMatch = quoteDrivers.findIndex((quoteDriver, index) => {
+          return !usedQuoteDrivers.has(index) &&
+                 (quoteDriver.name === mvrDriver.name || quoteDriver.licence_number === mvrDriver.licence_number);
+        });
+
+        if (partialMatch !== -1) {
+          matches.push({
+            mvrDriver,
+            quoteDriver: quoteDrivers[partialMatch],
+            matchStatus: 'partial_match'
+          });
+          usedQuoteDrivers.add(partialMatch);
+          return;
+        }
+
+        // 没有找到匹配
+        matches.push({
+          mvrDriver,
+          quoteDriver: null,
+          matchStatus: 'no_match'
+        });
+      });
+
+      return matches;
+    };
+
+    // 单个驾驶员G1验证逻辑
+    const validateSingleDriver = (
+      mvrDriver: MvrDriver | null,
+      quoteDriver: QuoteDriver | null,
+      matchStatus: 'exact_match' | 'partial_match' | 'no_match' | 'no_quote_data'
+    ): SingleDriverG1Result => {
+      const driverName = mvrDriver?.name || quoteDriver?.name || 'Unknown Driver';
+      
+      // 如果没有MVR数据，无法进行G1计算
+      if (!mvrDriver || !mvrDriver.date_of_birth || !mvrDriver.expiry_date) {
+        return {
+          driver_name: driverName,
+          mvr_licence_number: mvrDriver?.licence_number || null,
+          quote_licence_number: quoteDriver?.licence_number || null,
+          match_status: matchStatus,
+          mvr_calculated_g1_date: null,
+          calculation_method: 'Insufficient MVR data',
+          birth_date: mvrDriver?.date_of_birth || null,
+          expiry_date: mvrDriver?.expiry_date || null,
+          issue_date: mvrDriver?.issue_date || null,
+          birth_month_day: null,
+          expiry_month_day: null,
+          quote_g1_date: quoteDriver?.date_g1 || null,
+          dates_match: false,
+          date_difference_days: null,
+          driver_status: 'insufficient_data',
+          driver_recommendation: 'Missing required MVR data for G1 calculation',
+          driver_details: 'Birth date and expiry date are required for G1 calculation'
+        };
+      }
+
+      // 步骤1：计算G1日期
+      let calculatedG1Date: string | null = null;
+      let calculationMethod = '';
+      
+      const birthMonthDay = getMonthDay(mvrDriver.date_of_birth);
+      const expiryMonthDay = getMonthDay(mvrDriver.expiry_date);
+      
+      if (birthMonthDay && expiryMonthDay) {
+        if (birthMonthDay === expiryMonthDay) {
+          // 月日一致：使用Issue Date
+          if (mvrDriver.issue_date) {
+            calculatedG1Date = mvrDriver.issue_date;
+            calculationMethod = 'Used Issue Date (Birth date and Expiry date have matching month/day)';
+          } else {
+            calculationMethod = 'Issue Date not available (Birth date and Expiry date have matching month/day)';
+          }
+        } else {
+          // 月日不一致：Expiry Date减5年
+          calculatedG1Date = subtractYears(mvrDriver.expiry_date, 5);
+          calculationMethod = 'Expiry Date minus 5 years (Birth date and Expiry date have different month/day)';
+        }
+      }
+
+      // 步骤2：与Quote中的G1日期对比
+      const quoteG1Date = quoteDriver?.date_g1 || null;
+      let datesMatch = false;
+      let dateDifferenceDays: number | null = null;
+
+      if (calculatedG1Date && quoteG1Date) {
+        dateDifferenceDays = getDaysDifference(calculatedG1Date, quoteG1Date);
+        datesMatch = dateDifferenceDays !== null && dateDifferenceDays <= 30; // 容忍30天差异
+      }
+
+      // 步骤3：确定验证结果
+      let driverStatus: 'passed' | 'failed' | 'requires_review' | 'insufficient_data';
+      let driverRecommendation: string;
+      let driverDetails: string;
+
+      if (!calculatedG1Date) {
+        driverStatus = 'failed';
+        driverRecommendation = 'Unable to calculate G1 date from MVR data';
+        driverDetails = 'G1 date calculation failed. Please verify MVR data completeness.';
+      } else if (!quoteG1Date) {
+        driverStatus = 'requires_review';
+        driverRecommendation = 'G1 date calculated from MVR, but no Quote G1 date available for comparison';
+        driverDetails = `Calculated G1 date: ${formatDate(calculatedG1Date)}. Quote G1 date not provided.`;
+      } else if (datesMatch) {
+        driverStatus = 'passed';
+        driverRecommendation = 'G1 dates match between MVR and Quote';
+        driverDetails = `MVR calculated G1 date (${formatDate(calculatedG1Date)}) matches Quote G1 date (${formatDate(quoteG1Date)}) within acceptable range.`;
+      } else {
+        driverStatus = 'failed';
+        driverRecommendation = 'G1 dates do not match between MVR and Quote';
+        driverDetails = `MVR calculated G1 date (${formatDate(calculatedG1Date)}) differs from Quote G1 date (${formatDate(quoteG1Date)}) by ${dateDifferenceDays} days.`;
+      }
+
+      return {
+        driver_name: driverName,
+        mvr_licence_number: mvrDriver.licence_number,
+        quote_licence_number: quoteDriver?.licence_number || null,
+        match_status: matchStatus,
+        mvr_calculated_g1_date: calculatedG1Date,
+        calculation_method: calculationMethod,
+        birth_date: mvrDriver.date_of_birth,
+        expiry_date: mvrDriver.expiry_date,
+        issue_date: mvrDriver.issue_date,
+        birth_month_day: birthMonthDay,
+        expiry_month_day: expiryMonthDay,
+        quote_g1_date: quoteG1Date,
+        dates_match: datesMatch,
+        date_difference_days: dateDifferenceDays,
+        driver_status: driverStatus,
+        driver_recommendation: driverRecommendation,
+        driver_details: driverDetails
+      };
+    };
+
+    // 准备MVR驾驶员数据
+    const mvrDrivers: MvrDriver[] = [];
+    if (mvr?.records && Array.isArray(mvr.records)) {
+      // 多个MVR记录
+      mvrDrivers.push(...mvr.records);
+    } else if (mvr?.name && mvr?.licence_number) {
+      // 单个MVR记录（向后兼容）
+      mvrDrivers.push({
+        name: mvr.name || null,
+        licence_number: mvr.licence_number || null,
+        date_of_birth: mvr.date_of_birth || null,
+        expiry_date: mvr.expiry_date || null,
+        issue_date: mvr.issue_date || null
+      });
+    }
+
+    // 准备Quote驾驶员数据
+    const quoteDrivers: QuoteDriver[] = [];
+    if (quote?.drivers && Array.isArray(quote.drivers)) {
+      // 多个驾驶员
+      quoteDrivers.push(...quote.drivers);
+    } else if (quote?.date_g1) {
+      // 单个驾驶员（向后兼容）
+      // 从第一个MVR驾驶员获取姓名和驾照号
+      const firstMvrDriver = mvrDrivers[0];
+      if (firstMvrDriver?.name && firstMvrDriver?.licence_number) {
+        quoteDrivers.push({
+          name: firstMvrDriver.name,
+          licence_number: firstMvrDriver.licence_number,
+          date_g1: quote.date_g1
+        });
+      }
+    }
+
+    // 如果没有驾驶员数据，返回数据不足
+    if (mvrDrivers.length === 0) {
       return NextResponse.json({
         id: 'g1_start_date',
         name: 'G1 Start Date Validation',
         status: 'insufficient_data',
-        recommendation: 'Upload MVR document with birth date and expiry date',
-        details: 'Missing required MVR data: birth date and expiry date are required for G1 calculation',
+        recommendation: 'Upload MVR document with driver information',
+        details: 'No MVR driver data available for G1 calculation',
         data_sources: []
       } as BusinessRuleResult);
     }
 
-    // 步骤1：计算G1日期
-    let calculatedG1Date: string | null = null;
-    let calculationMethod = '';
-    
-    const birthMonthDay = getMonthDay(mvr.date_of_birth);
-    const expiryMonthDay = getMonthDay(mvr.expiry_date);
-    
-    if (birthMonthDay && expiryMonthDay) {
-      if (birthMonthDay === expiryMonthDay) {
-        // 月日一致：使用Issue Date
-        if (mvr.issue_date) {
-          calculatedG1Date = mvr.issue_date;
-          calculationMethod = 'Used Issue Date (Birth date and Expiry date have matching month/day)';
-        } else {
-          calculationMethod = 'Issue Date not available (Birth date and Expiry date have matching month/day)';
-        }
-      } else {
-        // 月日不一致：Expiry Date减5年
-        calculatedG1Date = subtractYears(mvr.expiry_date, 5);
-        calculationMethod = 'Expiry Date minus 5 years (Birth date and Expiry date have different month/day)';
-      }
-    }
+    // 匹配驾驶员
+    const matches = matchDrivers(mvrDrivers, quoteDrivers);
 
-    // 步骤2：与Quote中的G1日期对比
-    const quoteG1Date = quote?.date_g1 || null;
-    let datesMatch = false;
-    let dateDifferenceDays: number | null = null;
+    // 验证每个驾驶员
+    const driverResults: SingleDriverG1Result[] = matches.map(match => 
+      validateSingleDriver(match.mvrDriver, match.quoteDriver, match.matchStatus)
+    );
 
-    if (calculatedG1Date && quoteG1Date) {
-      dateDifferenceDays = getDaysDifference(calculatedG1Date, quoteG1Date);
-      datesMatch = dateDifferenceDays !== null && dateDifferenceDays <= 30; // 容忍30天差异
-    }
+    // 计算总结
+    const summary = {
+      total_drivers: driverResults.length,
+      matched_drivers: driverResults.filter(d => d.match_status === 'exact_match' || d.match_status === 'partial_match').length,
+      passed_validations: driverResults.filter(d => d.driver_status === 'passed').length,
+      failed_validations: driverResults.filter(d => d.driver_status === 'failed').length,
+      requires_review: driverResults.filter(d => d.driver_status === 'requires_review').length,
+      insufficient_data: driverResults.filter(d => d.driver_status === 'insufficient_data').length
+    };
 
-    // 步骤3：确定验证结果
-    let status: 'passed' | 'failed' | 'requires_review' | 'insufficient_data';
-    let recommendation: string;
-    let details: string;
-
-    if (!calculatedG1Date) {
-      status = 'failed';
-      recommendation = 'Unable to calculate G1 date from MVR data';
-      details = 'G1 date calculation failed. Please verify MVR data completeness.';
-    } else if (!quoteG1Date) {
-      status = 'requires_review';
-      recommendation = 'G1 date calculated from MVR, but no Quote G1 date available for comparison';
-      details = `Calculated G1 date: ${formatDate(calculatedG1Date)}. Quote G1 date not provided.`;
-    } else if (datesMatch) {
-      status = 'passed';
-      recommendation = 'G1 dates match between MVR and Quote';
-      details = `MVR calculated G1 date (${formatDate(calculatedG1Date)}) matches Quote G1 date (${formatDate(quoteG1Date)}) within acceptable range.`;
+    // 确定整体状态
+    let overallStatus: 'passed' | 'failed' | 'requires_review' | 'insufficient_data';
+    if (summary.failed_validations > 0) {
+      overallStatus = 'failed';
+    } else if (summary.requires_review > 0 || summary.insufficient_data > 0) {
+      overallStatus = 'requires_review';
+    } else if (summary.passed_validations > 0) {
+      overallStatus = 'passed';
     } else {
-      status = 'failed';
-      recommendation = 'G1 dates do not match between MVR and Quote';
-      details = `MVR calculated G1 date (${formatDate(calculatedG1Date)}) differs from Quote G1 date (${formatDate(quoteG1Date)}) by ${dateDifferenceDays} days.`;
+      overallStatus = 'insufficient_data';
+    }
+
+    // 生成整体推荐和详情
+    let overallRecommendation: string;
+    let overallDetails: string;
+
+    if (overallStatus === 'passed') {
+      overallRecommendation = `All ${summary.passed_validations} driver(s) passed G1 validation`;
+      overallDetails = `Successfully validated G1 dates for all drivers. ${summary.matched_drivers} of ${summary.total_drivers} drivers matched between MVR and Quote.`;
+    } else if (overallStatus === 'failed') {
+      overallRecommendation = `${summary.failed_validations} driver(s) failed G1 validation`;
+      overallDetails = `G1 validation failed for ${summary.failed_validations} drivers. Please review the individual driver results for details.`;
+    } else if (overallStatus === 'requires_review') {
+      overallRecommendation = `${summary.requires_review + summary.insufficient_data} driver(s) require manual review`;
+      overallDetails = `Some drivers require manual review due to missing data or matching issues. ${summary.matched_drivers} of ${summary.total_drivers} drivers matched between MVR and Quote.`;
+    } else {
+      overallRecommendation = 'Insufficient data for G1 validation';
+      overallDetails = 'Unable to perform G1 validation due to missing driver data.';
     }
 
     // 构建数据源列表
@@ -160,24 +422,46 @@ export async function POST(request: NextRequest) {
     if (mvr) dataSources.push('MVR');
     if (quote) dataSources.push('Quote');
 
+    const multiDriverResult: MultiDriverG1Result = {
+      drivers: driverResults,
+      summary,
+      overall_status: overallStatus
+    };
+
+    // 如果只有一个驾驶员，也返回向后兼容的结果格式
+    if (driverResults.length === 1) {
+      const singleDriver = driverResults[0];
+      const result: BusinessRuleResult = {
+        id: 'g1_start_date',
+        name: 'G1 Start Date Validation',
+        status: singleDriver.driver_status,
+        result: {
+          mvr_calculated_g1_date: singleDriver.mvr_calculated_g1_date,
+          calculation_method: singleDriver.calculation_method,
+          birth_date: singleDriver.birth_date,
+          expiry_date: singleDriver.expiry_date,
+          issue_date: singleDriver.issue_date,
+          birth_month_day: singleDriver.birth_month_day,
+          expiry_month_day: singleDriver.expiry_month_day,
+          quote_g1_date: singleDriver.quote_g1_date,
+          dates_match: singleDriver.dates_match,
+          date_difference_days: singleDriver.date_difference_days
+        },
+        recommendation: singleDriver.driver_recommendation,
+        details: singleDriver.driver_details,
+        data_sources: dataSources
+      };
+      return NextResponse.json(result);
+    }
+
+    // 多驾驶员结果
     const result: BusinessRuleResult = {
       id: 'g1_start_date',
       name: 'G1 Start Date Validation',
-      status,
-      result: {
-        mvr_calculated_g1_date: calculatedG1Date,
-        calculation_method: calculationMethod,
-        birth_date: mvr.date_of_birth,
-        expiry_date: mvr.expiry_date,
-        issue_date: mvr.issue_date || null,
-        birth_month_day: birthMonthDay,
-        expiry_month_day: expiryMonthDay,
-        quote_g1_date: quoteG1Date,
-        dates_match: datesMatch,
-        date_difference_days: dateDifferenceDays
-      },
-      recommendation,
-      details,
+      status: overallStatus,
+      result: multiDriverResult,
+      recommendation: overallRecommendation,
+      details: overallDetails,
       data_sources: dataSources
     };
 
