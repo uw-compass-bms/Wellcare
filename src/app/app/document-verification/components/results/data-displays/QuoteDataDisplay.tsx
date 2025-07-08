@@ -6,104 +6,89 @@ interface QuoteDataDisplayProps {
   data: QuoteData;
 }
 
-// 驾驶员整合信息类型
-interface ConsolidatedDriver {
+interface VehicleAssignment {
+  vehicleIndex: number;
+  vehicleName: string;
+  role: 'prn' | 'occ';
+}
+
+interface DriverWithAssignments {
   name: string;
-  personal_info: {
-    birth_date: string | null;
-    marital_status: string | null;
-    gender: string | null;
-    relationship_to_applicant: string | null;
-    licence_number: string | null;
-    licence_province: string | null;
-    occupation: string | null;
-    licence_class: string | null;
-    date_g: string | null;
-    date_g2: string | null;
-    date_g1: string | null;
-    date_insured: string | null;
-    current_carrier: string | null;
-    date_with_company: string | null;
-  };
-  vehicle_relationships: Array<{
-    vehicle_index: number;
-    vehicle_display: string;
-    role: 'prn' | 'occ';
-  }>;
-  claims: Array<{
+  role?: 'prn' | 'occ';
+  birth_date?: string | null;
+  gender?: string | null;
+  marital_status?: string | null;
+  relationship_to_applicant?: string | null;
+  licence_number?: string | null;
+  licence_province?: string | null;
+  licence_class?: string | null;
+  date_g1?: string | null;
+  date_g2?: string | null;
+  date_g?: string | null;
+  date_insured?: string | null;
+  current_carrier?: string | null;
+  date_with_company?: string | null;
+  occupation?: string | null;
+  claims?: Array<{
     description: string;
     date: string;
     at_fault: boolean;
     vehicle_involved: string;
-    tp_bi: string | null;
-    tp_pd: string | null;
-    ab: string | null;
-    coll: string | null;
-    other_pd: string | null;
-    vehicle_mismatch?: boolean;
+    tp_pd?: string | null;
+    ab?: string | null;
+    coll?: string | null;
   }>;
-  lapses: Array<{
+  lapses?: Array<{
     description: string;
     date: string;
     duration_months: number;
     re_instate_date: string;
   }>;
-  convictions: Array<{
+  convictions?: Array<{
     description: string;
     date: string;
-    kmh: string | null;
-    severity: string | null;
+    kmh?: string | null;
+    severity?: string | null;
   }>;
+  vehicleAssignments?: VehicleAssignment[];
 }
 
 export default function QuoteDataDisplay({ data }: QuoteDataDisplayProps) {
-  // 检查是否有驾驶员超出限制的提示
-  const hasDriverLimitNotice = data.driver_limit_notice;
-
-  // 整合驾驶员信息 - 按姓名去重，保留所有车辆关系
-  const consolidateDrivers = (): ConsolidatedDriver[] => {
-    const driverMap = new Map<string, ConsolidatedDriver>();
+  // 收集所有唯一的驾驶员（去重）
+  const getAllDrivers = (): DriverWithAssignments[] => {
+    const driversMap = new Map<string, DriverWithAssignments>();
     
     data.vehicles?.forEach((vehicle, vehicleIndex) => {
-      const vehicleDisplay = vehicle.vehicle_year && vehicle.vehicle_make && vehicle.vehicle_model 
-        ? `${vehicle.vehicle_year} ${vehicle.vehicle_make} ${vehicle.vehicle_model}`
-        : `Vehicle ${vehicleIndex + 1}`;
-      
       vehicle.drivers?.forEach((driver) => {
-        const driverName = driver.name;
-        if (!driverName) return;
-        
-        if (!driverMap.has(driverName)) {
-          // 第一次遇到这个驾驶员，创建记录
-          driverMap.set(driverName, {
-            name: driverName,
-            personal_info: driver, // 保存个人信息
-            vehicle_relationships: [],
-            claims: driver.claims || [],
-            lapses: driver.lapses || [],
-            convictions: driver.convictions || []
+        if (driver.name && !driversMap.has(driver.name)) {
+          driversMap.set(driver.name, {
+            ...driver,
+            vehicleAssignments: []
           });
         }
-        
-        // 添加车辆关系
-        const consolidatedDriver = driverMap.get(driverName)!;
-        consolidatedDriver.vehicle_relationships.push({
-          vehicle_index: vehicleIndex,
-          vehicle_display: vehicleDisplay,
-          role: driver.role || 'prn'
-        });
+        // 添加车辆分配信息
+        if (driver.name && driversMap.has(driver.name)) {
+          const existingDriver = driversMap.get(driver.name)!;
+          existingDriver.vehicleAssignments?.push({
+            vehicleIndex,
+            vehicleName: vehicle.vehicle_year && vehicle.vehicle_make && vehicle.vehicle_model 
+              ? `${vehicle.vehicle_year} ${vehicle.vehicle_make} ${vehicle.vehicle_model}`
+              : `Vehicle ${vehicleIndex + 1}`,
+            role: driver.role || 'prn'
+          });
+        }
       });
     });
     
-    return Array.from(driverMap.values());
+    return Array.from(driversMap.values());
   };
 
-  const consolidatedDrivers = consolidateDrivers();
+  const allDrivers = getAllDrivers();
   
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* 驾驶员限制提示 */}
-      {hasDriverLimitNotice && (
+      {data.driver_limit_notice && (
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
           <div className="flex items-center">
             <div className="flex-shrink-0">
@@ -120,242 +105,329 @@ export default function QuoteDataDisplay({ data }: QuoteDataDisplayProps) {
         </div>
       )}
 
-      {/* 多车辆多驾驶员嵌套展示 */}
-      {data.vehicles && data.vehicles.length > 0 ? (
-        <div className="space-y-8">
-          {/* 车辆概览 */}
-          <div className="border border-gray-200 rounded-lg p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">
-              Vehicle Overview ({data.vehicles.length} {data.vehicles.length === 1 ? 'Vehicle' : 'Vehicles'})
-            </h3>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {data.vehicles.map((vehicle, index) => (
-                <div key={index} className="border border-gray-200 rounded-lg p-4 bg-gray-50">
-                  <h4 className="font-medium text-gray-900 mb-3">
-                    Vehicle {index + 1}
+      {/* 车辆概览部分 */}
+      {data.vehicles && data.vehicles.length > 0 && (
+        <div className="border border-gray-200 rounded-lg p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-6">
+            Vehicles ({data.vehicles.length})
+          </h3>
+          
+          <div className="space-y-6">
+            {data.vehicles.map((vehicle, vehicleIndex) => (
+              <div key={vehicleIndex} className="border border-gray-100 rounded-lg p-4 bg-gray-50">
+                {/* 车辆标题 */}
+                <div className="mb-4">
+                  <h4 className="text-base font-medium text-gray-900">
+                    Vehicle {vehicleIndex + 1} of {data.vehicles.length}
+                    {vehicle.vehicle_year && vehicle.vehicle_make && vehicle.vehicle_model && (
+                      <span className="text-gray-600 ml-2">
+                        | {vehicle.vehicle_year} {vehicle.vehicle_make} {vehicle.vehicle_model}
+                      </span>
+                    )}
                   </h4>
-                  {vehicle.vehicle_year && vehicle.vehicle_make && vehicle.vehicle_model && (
-                    <p className="text-sm text-gray-600 mb-3">
-                      {vehicle.vehicle_year} {vehicle.vehicle_make} {vehicle.vehicle_model}
-                    </p>
-                  )}
-                  
-                  <div className="space-y-2 text-sm">
-                    <div><strong>VIN:</strong> {vehicle.vin || 'N/A'}</div>
-                    <div><strong>Garaging:</strong> {vehicle.garaging_location || 'N/A'}</div>
-                    <div><strong>Leased:</strong> {vehicle.leased !== null ? (vehicle.leased ? 'Yes' : 'No') : 'N/A'}</div>
-                    {vehicle.annual_km && (
-                      <div><strong>Annual Mileage:</strong> {vehicle.annual_km}</div>
-                    )}
-                    {vehicle.daily_km && (
-                      <div><strong>Daily Commute:</strong> {vehicle.daily_km}</div>
-                    )}
-                  </div>
-                  
-                  {/* Coverage信息 */}
-                  {vehicle.coverages && (
-                    <div className="mt-4 pt-4 border-t border-gray-300">
-                      <h5 className="font-medium text-gray-800 mb-2">Coverage Summary</h5>
-                      <div className="space-y-1 text-xs">
-                        {vehicle.coverages.bodily_injury && (
-                          <div><strong>Bodily Injury:</strong> ${vehicle.coverages.bodily_injury.amount || 'N/A'}</div>
-                        )}
-                        {vehicle.coverages.loss_or_damage?.all_perils && (
-                          <div><strong>All Perils:</strong> ${vehicle.coverages.loss_or_damage.all_perils.deductible || '0'} deductible</div>
-                        )}
-                        {vehicle.coverages.loss_or_damage?.collision && (
-                          <div><strong>Collision:</strong> ${vehicle.coverages.loss_or_damage.collision.deductible || '0'} deductible</div>
-                        )}
-                        {vehicle.coverages.loss_or_damage?.comprehensive && (
-                          <div><strong>Comprehensive:</strong> ${vehicle.coverages.loss_or_damage.comprehensive.deductible || '0'} deductible</div>
-                        )}
-                        {vehicle.coverages.endorsements && (
-                          <div className="mt-2 text-gray-600">
-                            <div><strong>Endorsements:</strong> {
-                              Object.entries(vehicle.coverages.endorsements)
-                                .filter(([, value]) => value === true || (value && typeof value === 'object' && value.covered))
-                                .map(([key]) => {
-                                  const endorsementNames: { [key: string]: string } = {
-                                    'rent_or_lease': '#5a',
-                                    'loss_of_use': '#20',
-                                    'liab_to_unowned_veh': '#27',
-                                    'replacement_cost': '#43',
-                                    'family_protection': '#44',
-                                    'accident_waiver': 'AccWv',
-                                    'minor_conviction_protection': 'MinConvProt'
-                                  };
-                                  return endorsementNames[key] || key;
-                                })
-                                .join(', ') || 'None'
-                            }</div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
                 </div>
-              ))}
-            </div>
-          </div>
 
-          {/* 驾驶员信息 */}
-          <div className="border border-gray-200 rounded-lg p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">
-              Driver Information ({consolidatedDrivers.length} {consolidatedDrivers.length === 1 ? 'Driver' : 'Drivers'})
-            </h3>
+                {/* 车辆基本信息网格 */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4 text-sm">
+                  <div>
+                    <div className="text-gray-500">VIN</div>
+                    <div className="font-medium">{vehicle.vin || 'N/A'}</div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500">Garaging</div>
+                    <div className="font-medium">{vehicle.garaging_location || 'N/A'}</div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500">Annual km</div>
+                    <div className="font-medium">{vehicle.annual_km || 'N/A'}</div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500">Daily km</div>
+                    <div className="font-medium">{vehicle.daily_km || 'N/A'}</div>
+                  </div>
+                </div>
 
-            {consolidatedDrivers.length > 0 ? (
-              <div className="space-y-8">
-                {consolidatedDrivers.map((driver, index) => (
-                  <div key={index} className="border border-gray-200 rounded-lg p-6 bg-gray-50">
-                    {/* 驾驶员姓名 */}
-                    <h4 className="text-lg font-medium text-gray-900 mb-4">
-                      {driver.name}
-                    </h4>
-
-                    {/* 车辆关系 */}
-                    <div className="mb-6">
-                      <h5 className="font-medium text-gray-800 mb-3">Vehicle Relationships</h5>
-                      <div className="flex flex-wrap gap-2">
-                        {driver.vehicle_relationships.map((relationship, idx) => (
-                          <span 
-                            key={idx}
-                            className={`px-3 py-1 rounded-full text-sm ${
-                              relationship.role === 'prn' 
-                                ? 'bg-blue-100 text-blue-800' 
-                                : 'bg-green-100 text-green-800'
-                            }`}
-                          >
-                            {relationship.vehicle_display}: {relationship.role === 'prn' ? 'Principal' : 'Occasional'}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* 个人信息 */}
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                      <div className="space-y-4">
-                        <div>
-                          <h6 className="font-medium text-gray-800 mb-2">Personal Information</h6>
-                          <div className="space-y-2 text-sm">
-                            <div><strong>Birth Date:</strong> {driver.personal_info.birth_date || 'N/A'}</div>
-                            <div><strong>Gender:</strong> {driver.personal_info.gender || 'N/A'}</div>
-                            <div><strong>Marital Status:</strong> {driver.personal_info.marital_status || 'N/A'}</div>
-                            <div><strong>Relationship:</strong> {driver.personal_info.relationship_to_applicant || 'N/A'}</div>
-                            <div><strong>Occupation:</strong> {driver.personal_info.occupation || 'N/A'}</div>
-                          </div>
-                        </div>
-
-                        <div>
-                          <h6 className="font-medium text-gray-800 mb-2">License Information</h6>
-                          <div className="space-y-2 text-sm">
-                            <div><strong>License Number:</strong> {driver.personal_info.licence_number || 'N/A'}</div>
-                            <div><strong>License Province:</strong> {driver.personal_info.licence_province || 'N/A'}</div>
-                            <div><strong>License Class:</strong> {driver.personal_info.licence_class || 'N/A'}</div>
-                          </div>
-                        </div>
-
-                        <div>
-                          <h6 className="font-medium text-gray-800 mb-2">License Dates</h6>
-                          <div className="grid grid-cols-3 gap-2 text-sm">
-                            <div><strong>G1:</strong> {driver.personal_info.date_g1 || 'N/A'}</div>
-                            <div><strong>G2:</strong> {driver.personal_info.date_g2 || 'N/A'}</div>
-                            <div><strong>G:</strong> {driver.personal_info.date_g || 'N/A'}</div>
-                          </div>
-                        </div>
-
-                        <div>
-                          <h6 className="font-medium text-gray-800 mb-2">Insurance History</h6>
-                          <div className="space-y-2 text-sm">
-                            <div><strong>Date Insured:</strong> {driver.personal_info.date_insured || 'N/A'}</div>
-                            <div><strong>Current Carrier:</strong> {driver.personal_info.current_carrier || 'N/A'}</div>
-                            <div><strong>Date with Company:</strong> {driver.personal_info.date_with_company || 'N/A'}</div>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="space-y-4">
-                        {/* Claims */}
-                        <div>
-                          <h6 className="font-medium text-gray-800 mb-2">Claims</h6>
-                          {driver.claims && driver.claims.length > 0 ? (
-                            <div className="space-y-2">
-                              {driver.claims.map((claim, claimIndex) => (
-                                <div key={claimIndex} className="border border-gray-200 rounded p-3 bg-white">
-                                  <div className="flex justify-between items-start mb-2">
-                                    <span className="font-medium text-sm">{claim.description}</span>
-                                    <span className={`px-2 py-1 rounded text-xs ${
-                                      claim.at_fault ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'
-                                    }`}>
-                                      {claim.at_fault ? 'At Fault' : 'Not At Fault'}
-                                    </span>
-                                  </div>
-                                  <div className="text-xs text-gray-600 space-y-1">
-                                    <div>Date: {claim.date}</div>
-                                    <div>Vehicle: {claim.vehicle_involved}</div>
-                                    <div>TP/PD: {claim.tp_pd || 'N/A'} | AB: {claim.ab || 'N/A'} | Coll: {claim.coll || 'N/A'}</div>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          ) : (
-                            <div className="text-gray-500 text-sm bg-white p-3 rounded border">None</div>
-                          )}
-                        </div>
-
-                        {/* Lapses */}
-                        <div>
-                          <h6 className="font-medium text-gray-800 mb-2">Insurance Lapses</h6>
-                          {driver.lapses && driver.lapses.length > 0 ? (
-                            <div className="space-y-2">
-                              {driver.lapses.map((lapse, lapseIndex) => (
-                                <div key={lapseIndex} className="border-l-4 border-yellow-400 pl-3 py-2 bg-yellow-50 rounded">
-                                  <div className="font-medium text-sm">{lapse.description}</div>
-                                  <div className="text-xs text-gray-600 mt-1">
-                                    From: {lapse.date} | To: {lapse.re_instate_date} | Duration: {lapse.duration_months} months
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          ) : (
-                            <div className="text-gray-500 text-sm bg-white p-3 rounded border">None</div>
-                          )}
-                        </div>
-
-                        {/* Convictions */}
-                        <div>
-                          <h6 className="font-medium text-gray-800 mb-2">Convictions</h6>
-                          {driver.convictions && driver.convictions.length > 0 ? (
-                            <div className="space-y-2">
-                              {driver.convictions.map((conviction, convictionIndex) => (
-                                <div key={convictionIndex} className="border-l-4 border-red-400 pl-3 py-2 bg-red-50 rounded">
-                                  <div className="font-medium text-sm">{conviction.description}</div>
-                                  <div className="text-xs text-gray-600 mt-1">
-                                    Date: {conviction.date} | Speed: {conviction.kmh} km/h | Severity: {conviction.severity}
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          ) : (
-                            <div className="text-gray-500 text-sm bg-white p-3 rounded border">None</div>
-                          )}
-                        </div>
-                      </div>
+                {/* 购买和特征信息网格 */}
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-4 text-sm border-t border-gray-200 pt-3">
+                  <div>
+                    <div className="text-gray-500">Purchase Condition</div>
+                    <div className="font-medium">
+                      <span className={`px-2 py-1 rounded text-xs ${
+                        vehicle.purchase_condition === 'New' ? 'bg-green-100 text-green-800' :
+                        vehicle.purchase_condition === 'Used' ? 'bg-blue-100 text-blue-800' :
+                        vehicle.purchase_condition === 'Demo' ? 'bg-purple-100 text-purple-800' :
+                        'bg-gray-100 text-gray-800'
+                      }`}>
+                        {vehicle.purchase_condition || 'N/A'}
+                      </span>
                     </div>
                   </div>
-                ))}
+                  <div>
+                    <div className="text-gray-500">Purchase Date</div>
+                    <div className="font-medium">{vehicle.purchase_date || 'N/A'}</div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500">List Price New</div>
+                    <div className="font-medium">{vehicle.list_price_new ? `$${vehicle.list_price_new}` : 'N/A'}</div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500">Winter Tires</div>
+                    <div className="font-medium">
+                      <span className={`px-2 py-1 rounded text-xs ${
+                        vehicle.winter_tires ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'
+                      }`}>
+                        {vehicle.winter_tires !== null ? (vehicle.winter_tires ? 'Yes' : 'No') : 'N/A'}
+                      </span>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500">Parking at Night</div>
+                    <div className="font-medium">{vehicle.parking_at_night || 'N/A'}</div>
+                  </div>
+                </div>
+
+                {/* 驾驶员列表 */}
+                <div className="mb-4">
+                  <div className="text-sm text-gray-500 mb-2">Drivers</div>
+                  <div className="flex flex-wrap gap-2">
+                    {vehicle.drivers && vehicle.drivers.length > 0 ? (
+                      vehicle.drivers.map((driver, driverIndex) => (
+                        <span key={driverIndex} className={`px-3 py-1 rounded-full text-sm ${
+                          driver.role === 'prn' 
+                            ? 'bg-blue-100 text-blue-800' 
+                            : 'bg-green-100 text-green-800'
+                        }`}>
+                          {driver.name} ({driver.role === 'prn' ? 'Prn' : 'Occ'})
+                        </span>
+                      ))
+                    ) : (
+                      <span className="text-gray-500 text-sm">No drivers assigned</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* 简化的Coverage信息 */}
+                {vehicle.coverages && (
+                  <div className="border-t border-gray-200 pt-3">
+                    <div className="text-sm text-gray-500 mb-2">Key Coverages</div>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                      {vehicle.coverages.bodily_injury && (
+                        <div>Bodily Injury: ${vehicle.coverages.bodily_injury.amount}</div>
+                      )}
+                      {vehicle.coverages.loss_or_damage?.collision && (
+                        <div>Collision: ${vehicle.coverages.loss_or_damage.collision.deductible}</div>
+                      )}
+                      {vehicle.coverages.loss_or_damage?.comprehensive && (
+                        <div>Comprehensive: ${vehicle.coverages.loss_or_damage.comprehensive.deductible}</div>
+                      )}
+                      {vehicle.coverages.direct_compensation && (
+                        <div>Direct Comp: ${vehicle.coverages.direct_compensation.deductible}</div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
-            ) : (
-              <div className="text-center py-8 text-gray-500">
-                No drivers found
-              </div>
-            )}
+            ))}
           </div>
         </div>
-      ) : (
-        <div className="text-center py-8 text-gray-500">
-          No vehicle data found
+      )}
+
+      {/* 驾驶员详细信息部分 */}
+      {allDrivers.length > 0 && (
+        <div className="border border-gray-200 rounded-lg p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-6">
+            Driver Details ({allDrivers.length})
+          </h3>
+          
+          <div className="space-y-8">
+            {allDrivers.map((driver, driverIndex) => (
+              <div key={driverIndex} className="border border-gray-100 rounded-lg p-6 bg-gray-50">
+                {/* 驾驶员标题 */}
+                <div className="flex items-center justify-between mb-6">
+                  <h4 className="text-base font-medium text-gray-900">
+                    Driver {driverIndex + 1} of {allDrivers.length} | {driver.name}
+                  </h4>
+                                     <div className="flex gap-2">
+                     {driver.vehicleAssignments?.map((assignment: VehicleAssignment, idx: number) => (
+                       <span key={idx} className={`px-2 py-1 rounded text-xs ${
+                         assignment.role === 'prn' 
+                           ? 'bg-blue-100 text-blue-800' 
+                           : 'bg-green-100 text-green-800'
+                       }`}>
+                         {assignment.vehicleName}: {assignment.role === 'prn' ? 'Principal' : 'Occasional'}
+                       </span>
+                     ))}
+                   </div>
+                </div>
+
+                {/* 个人信息网格 */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                  {/* 基本信息 */}
+                  <div>
+                    <h5 className="font-medium text-gray-800 text-sm mb-3">Personal Information</h5>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">Birth Date:</span>
+                        <span>{driver.birth_date || 'N/A'}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">Gender:</span>
+                        <span>{driver.gender || 'N/A'}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">Marital Status:</span>
+                        <span>{driver.marital_status || 'N/A'}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">Relationship:</span>
+                        <span>{driver.relationship_to_applicant || 'N/A'}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">Occupation:</span>
+                        <span>{driver.occupation || 'N/A'}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 驾照信息 */}
+                  <div>
+                    <h5 className="font-medium text-gray-800 text-sm mb-3">License Information</h5>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">License Number:</span>
+                        <span className="font-mono text-xs">{driver.licence_number || 'N/A'}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">Province:</span>
+                        <span>{driver.licence_province || 'N/A'}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">Class:</span>
+                        <span>{driver.licence_class || 'N/A'}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">Date G1:</span>
+                        <span>{driver.date_g1 || 'N/A'}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">Date G2:</span>
+                        <span>{driver.date_g2 || 'N/A'}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">Date G:</span>
+                        <span>{driver.date_g || 'N/A'}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 保险历史 */}
+                  <div>
+                    <h5 className="font-medium text-gray-800 text-sm mb-3">Insurance History</h5>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">Date Insured:</span>
+                        <span>{driver.date_insured || 'N/A'}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">Current Carrier:</span>
+                        <span>{driver.current_carrier || 'N/A'}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">Date with Company:</span>
+                        <span>{driver.date_with_company || 'N/A'}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Claims, Lapses, Convictions */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  {/* Claims */}
+                  <div>
+                    <h5 className="font-medium text-gray-800 text-sm mb-3">Claims</h5>
+                                         {driver.claims && driver.claims.length > 0 ? (
+                       <div className="space-y-3">
+                         {driver.claims.map((claim: NonNullable<DriverWithAssignments['claims']>[0], claimIndex: number) => (
+                           <div key={claimIndex} className="border border-gray-200 rounded-lg p-3 bg-white">
+                             <div className="flex justify-between items-start mb-2">
+                               <span className="font-medium text-sm">{claim.description}</span>
+                               <span className={`px-2 py-1 rounded text-xs ${
+                                 claim.at_fault ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'
+                               }`}>
+                                 {claim.at_fault ? 'At Fault' : 'NAF'}
+                               </span>
+                             </div>
+                             <div className="text-xs text-gray-600 space-y-1">
+                               <div>Date: {claim.date}</div>
+                               <div>Vehicle: {claim.vehicle_involved}</div>
+                               {claim.tp_pd && <div>TP/PD: ${claim.tp_pd}</div>}
+                               {claim.ab && <div>AB: ${claim.ab}</div>}
+                               {claim.coll && <div>Coll: ${claim.coll}</div>}
+                             </div>
+                           </div>
+                         ))}
+                       </div>
+                    ) : (
+                      <div className="text-gray-500 text-sm italic">No claims</div>
+                    )}
+                  </div>
+
+                  {/* Lapses */}
+                  <div>
+                    <h5 className="font-medium text-gray-800 text-sm mb-3">Lapses</h5>
+                                         {driver.lapses && driver.lapses.length > 0 ? (
+                       <div className="space-y-3">
+                         {driver.lapses.map((lapse: NonNullable<DriverWithAssignments['lapses']>[0], lapseIndex: number) => (
+                           <div key={lapseIndex} className="border-l-4 border-yellow-400 pl-3 py-2 bg-yellow-50 rounded">
+                             <div className="font-medium text-sm">{lapse.description}</div>
+                             <div className="text-xs text-gray-600 mt-1">
+                               From: {lapse.date}<br />
+                               Duration: {lapse.duration_months} months<br />
+                               Reinstate: {lapse.re_instate_date}
+                             </div>
+                           </div>
+                         ))}
+                       </div>
+                    ) : (
+                      <div className="text-gray-500 text-sm italic">No lapses</div>
+                    )}
+                  </div>
+
+                  {/* Convictions */}
+                  <div>
+                    <h5 className="font-medium text-gray-800 text-sm mb-3">Convictions</h5>
+                                         {driver.convictions && driver.convictions.length > 0 ? (
+                       <div className="space-y-3">
+                         {driver.convictions.map((conviction: NonNullable<DriverWithAssignments['convictions']>[0], convictionIndex: number) => (
+                           <div key={convictionIndex} className="border-l-4 border-red-400 pl-3 py-2 bg-red-50 rounded">
+                             <div className="font-medium text-sm">{conviction.description}</div>
+                             <div className="text-xs text-gray-600 mt-1">
+                               Date: {conviction.date}<br />
+                               Speed: {conviction.kmh} km/h<br />
+                               Severity: {conviction.severity}
+                             </div>
+                           </div>
+                         ))}
+                       </div>
+                    ) : (
+                      <div className="text-gray-500 text-sm italic">No convictions</div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 如果没有数据 */}
+      {(!data.vehicles || data.vehicles.length === 0) && (
+        <div className="text-center py-12 text-gray-500">
+          <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+          <h3 className="mt-2 text-sm font-medium text-gray-900">No quote data found</h3>
+          <p className="mt-1 text-sm text-gray-500">Upload and process a quote document to view the data here.</p>
         </div>
       )}
     </div>

@@ -7,18 +7,21 @@ interface QuoteUploaderProps {
   documentState: DocumentState;
   onFileUpload: (file: File) => Promise<void>;
   onFileDelete?: () => void;
+  onFileReprocess?: () => Promise<void>;
 }
 
 export default function QuoteUploader({ 
   documentState, 
   onFileUpload,
-  onFileDelete
+  onFileDelete,
+  onFileReprocess
 }: QuoteUploaderProps) {
   return (
     <SingleFileUploader
       documentState={documentState}
       onFileUpload={onFileUpload}
       onFileDelete={onFileDelete}
+      onFileReprocess={onFileReprocess}
       title="Quote Documents"
       description="Insurance quote information"
       icon={Calculator}

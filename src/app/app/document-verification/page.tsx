@@ -8,15 +8,26 @@ export default function DocumentVerification() {
   // 使用自定义Hook管理所有文档处理逻辑
   const {
     documents,
+    // Data extraction state
     isProcessing,
     processingStep,
+    // Validation state
+    isValidating,
+    validationStep,
+    hasValidated,
+    validationResults,
+    validationKey,
+    // Functions
     handleFileUpload,
     processDocuments,
+    validateDocuments,
     // 多文件相关功能
     handleMultiFileUpload,
     handleFileDelete,
     // 单文件重新处理
-    reprocessSingleFile
+    reprocessSingleFile,
+    // 单文档重新处理
+    reprocessSingleDocument
   } = useDocumentProcessing();
 
   return (
@@ -34,6 +45,7 @@ export default function DocumentVerification() {
         onMultiFileUpload={(files, type) => handleMultiFileUpload(files, type)}
         onFileDelete={(fileId, type) => handleFileDelete(fileId, type)}
         onFileReprocess={(fileId, type) => reprocessSingleFile(fileId, type)}
+        onSingleFileReprocess={(type) => reprocessSingleDocument(type)}
       />
 
       {/* 处理控制面板 */}
@@ -41,7 +53,11 @@ export default function DocumentVerification() {
         documents={documents}
         isProcessing={isProcessing}
         processingStep={processingStep}
+        isValidating={isValidating}
+        validationStep={validationStep}
+        hasValidated={hasValidated}
         onProcessDocuments={processDocuments}
+        onValidateDocuments={validateDocuments}
       />
 
       {/* 结果展示区域 */}
@@ -49,6 +65,10 @@ export default function DocumentVerification() {
         documents={documents} 
         isProcessing={isProcessing}
         processingStep={processingStep}
+        isValidating={isValidating}
+        validationStep={validationStep}
+        hasValidated={hasValidated}
+        validationKey={validationKey}
       />
     </div>
   );

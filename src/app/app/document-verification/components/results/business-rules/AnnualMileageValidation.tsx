@@ -4,7 +4,12 @@ import React, { useEffect, useState, useRef } from 'react';
 import { BusinessRuleProps, BusinessRuleResult, RULE_STATUS_CONFIG, AnnualMileageResult, SingleVehicleAnnualMileageResult } from './types';
 import { QuoteData } from '../../../types';
 
-export default function AnnualMileageValidation({ documents, onResultChange }: BusinessRuleProps) {
+export default function AnnualMileageValidation({ 
+  documents, 
+  onResultChange, 
+  shouldValidate = false, 
+  validationKey = 0 
+}: BusinessRuleProps) {
   const [result, setResult] = useState<BusinessRuleResult | null>(null);
   const [loading, setLoading] = useState(false);
   const onResultChangeRef = useRef(onResultChange);
@@ -14,7 +19,19 @@ export default function AnnualMileageValidation({ documents, onResultChange }: B
     onResultChangeRef.current = onResultChange;
   }, [onResultChange]);
 
+  // 当shouldValidate变为false时，清空结果
   useEffect(() => {
+    if (!shouldValidate) {
+      setResult(null);
+    }
+  }, [shouldValidate]);
+
+  useEffect(() => {
+    // 只有在shouldValidate为true时才开始验证
+    if (!shouldValidate) {
+      return;
+    }
+
     const validateRule = async () => {
       setLoading(true);
       
@@ -84,7 +101,7 @@ export default function AnnualMileageValidation({ documents, onResultChange }: B
     };
 
     validateRule();
-  }, [documents]);
+  }, [documents, shouldValidate, validationKey]);
 
   // 显示加载状态
   if (loading) {

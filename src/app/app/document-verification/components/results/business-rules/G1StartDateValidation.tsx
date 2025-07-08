@@ -14,7 +14,12 @@ function isMultiDriverG1Result(result: unknown): result is MultiDriverG1Result {
   return result !== null && typeof result === 'object' && 'drivers' in result && Array.isArray((result as { drivers: unknown }).drivers) && 'summary' in result;
 }
 
-export default function G1StartDateValidation({ documents, onResultChange }: BusinessRuleProps) {
+export default function G1StartDateValidation({ 
+  documents, 
+  onResultChange, 
+  shouldValidate = false, 
+  validationKey = 0 
+}: BusinessRuleProps) {
   const [result, setResult] = useState<BusinessRuleResult | null>(null);
   const [loading, setLoading] = useState(false);
   const onResultChangeRef = useRef(onResultChange);
@@ -24,7 +29,19 @@ export default function G1StartDateValidation({ documents, onResultChange }: Bus
     onResultChangeRef.current = onResultChange;
   }, [onResultChange]);
 
+  // 当shouldValidate变为false时，清空结果
   useEffect(() => {
+    if (!shouldValidate) {
+      setResult(null);
+    }
+  }, [shouldValidate]);
+
+  useEffect(() => {
+    // 只有在shouldValidate为true时才开始验证
+    if (!shouldValidate) {
+      return;
+    }
+
     const validateRule = async () => {
       setLoading(true);
       
@@ -193,7 +210,7 @@ export default function G1StartDateValidation({ documents, onResultChange }: Bus
     };
 
     validateRule();
-  }, [documents]);
+  }, [documents, shouldValidate, validationKey]);
 
   // 显示加载状态
   if (loading) {

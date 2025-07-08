@@ -11,10 +11,23 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/com
 
 interface BusinessRulesValidationProps {
   documents: Record<DocumentType, DocumentState>;
+  shouldValidate?: boolean; // 控制是否应该开始验证
+  validationKey?: number; // 用于重新触发验证
 }
 
-export default function BusinessRulesValidation({ documents }: BusinessRulesValidationProps) {
+export default function BusinessRulesValidation({ 
+  documents, 
+  shouldValidate = false,
+  validationKey = 0
+}: BusinessRulesValidationProps) {
   const [ruleResults, setRuleResults] = useState<Record<string, BusinessRuleResult>>({});
+
+  // 当shouldValidate变为false时，清空结果
+  React.useEffect(() => {
+    if (!shouldValidate) {
+      setRuleResults({});
+    }
+  }, [shouldValidate]);
 
   // 准备文档数据供规则使用 - 使用useMemo避免无限循环
   const preparedDocuments = useMemo(() => ({
@@ -55,6 +68,31 @@ export default function BusinessRulesValidation({ documents }: BusinessRulesVali
 
   const overallStatus = getOverallStatus();
   const totalRules = 4; // 现在有4个规则
+
+  // 如果还没有开始验证，显示等待状态
+  if (!shouldValidate) {
+    return (
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle className="flex items-center space-x-2">
+            <span>Business Rules Validation</span>
+            <span className="text-sm font-normal text-gray-500">(Ready)</span>
+          </CardTitle>
+          <CardDescription>
+            Click "Validate & Cross-Check" to run automated validation of business logic and compliance requirements
+          </CardDescription>
+        </CardHeader>
+        
+        <CardContent>
+          <div className="text-center py-8 text-gray-500">
+            <div className="text-4xl mb-2">⏳</div>
+            <p>Waiting for validation to start...</p>
+            <p className="text-sm mt-1">Extract document data first, then run validation</p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card className="mt-6">
@@ -134,24 +172,32 @@ export default function BusinessRulesValidation({ documents }: BusinessRulesVali
             <G1StartDateValidation
               documents={preparedDocuments}
               onResultChange={handleRuleResultChange}
+              shouldValidate={shouldValidate}
+              validationKey={validationKey}
             />
 
             {/* 规则2: 新司机判定 */}
             <NewDriverValidation
               documents={preparedDocuments}
               onResultChange={handleRuleResultChange}
+              shouldValidate={shouldValidate}
+              validationKey={validationKey}
             />
 
             {/* 规则3: 年行驶公里数审核 */}
             <AnnualMileageValidation
               documents={preparedDocuments}
               onResultChange={handleRuleResultChange}
+              shouldValidate={shouldValidate}
+              validationKey={validationKey}
             />
 
             {/* 规则4: 车辆年龄与保险覆盖审核 */}
             <VehicleAgeValidation
               documents={preparedDocuments}
               onResultChange={handleRuleResultChange}
+              shouldValidate={shouldValidate}
+              validationKey={validationKey}
             />
 
             {/* 未来规则占位符 */}

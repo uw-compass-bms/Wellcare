@@ -2,13 +2,14 @@
 import React, { useState, useRef } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { CheckCircle, Loader2, Upload, LucideIcon, Trash2 } from 'lucide-react';
+import { CheckCircle, Loader2, Upload, LucideIcon, Trash2, RotateCcw } from 'lucide-react';
 import { DocumentState } from '../../types';
 
 interface SingleFileUploaderProps {
   documentState: DocumentState;
   onFileUpload: (file: File) => Promise<void>;
   onFileDelete?: () => void;
+  onFileReprocess?: () => Promise<void>;
   title: string;
   description: string;
   icon: LucideIcon;
@@ -20,6 +21,7 @@ export default function SingleFileUploader({
   documentState, 
   onFileUpload,
   onFileDelete,
+  onFileReprocess,
   title,
   description,
   icon: Icon,
@@ -155,19 +157,37 @@ export default function SingleFileUploader({
               <CheckCircle className="w-4 h-4 text-green-600" />
               <span className="text-sm font-medium truncate">{uploadedFileName}</span>
             </div>
-            {/* 删除按钮 */}
-            {onFileDelete && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={onFileDelete}
-                disabled={documentState.loading}
-                className="h-8 w-8 p-0 hover:bg-red-100"
-                title="Delete file"
-              >
-                <Trash2 className="w-3 h-3 text-red-600" />
-              </Button>
-            )}
+            
+            {/* 操作按钮 */}
+            <div className="flex items-center space-x-1 ml-2">
+              {/* 重新处理按钮 */}
+              {(documentState.error || documentState.uploaded) && onFileReprocess && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={onFileReprocess}
+                  disabled={documentState.loading}
+                  className="h-8 w-8 p-0 hover:bg-blue-100"
+                  title="Reprocess file"
+                >
+                  <RotateCcw className="w-3 h-3 text-blue-600" />
+                </Button>
+              )}
+              
+              {/* 删除按钮 */}
+              {onFileDelete && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={onFileDelete}
+                  disabled={documentState.loading}
+                  className="h-8 w-8 p-0 hover:bg-red-100"
+                  title="Delete file"
+                >
+                  <Trash2 className="w-3 h-3 text-red-600" />
+                </Button>
+              )}
+            </div>
           </div>
         )}
 

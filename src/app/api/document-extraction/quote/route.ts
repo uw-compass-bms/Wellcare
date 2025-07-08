@@ -3,145 +3,121 @@ import { auth } from "@clerk/nextjs/server";
 import { QuoteData } from "../../../app/document-verification/types";
 
 /**
- * Quote提取提示词 - 基于实际文档格式
+ * Quote提取提示词 - 基于真实文档结构（4页格式）
  */
 const getQuotePrompt = () => `
 You are an expert AI agent specializing in OCR and data extraction from Canadian insurance quote documents. Your task is to analyze the provided document and extract information into a structured JSON format.
 
-**DOCUMENT STRUCTURE ANALYSIS:**
-The document contains multiple sections:
-1. **Vehicle Headers**: "Vehicle X of Y | Private Passenger - YYYY MAKE MODEL (VIN)"
-2. **Vehicle Details**: VIN, Annual km, Daily km, Garaging Location, etc.
-3. **Driver Lists**: Under each vehicle showing "Driver Name (Role)" where Role is "Prn" (Principal) or "Occ" (Occasional)
-4. **Coverage Information**: Insurance coverage details for each vehicle
-5. **Individual Driver Pages**: "Driver X of Y | Driver Name" with detailed personal information
-6. **Claims/Lapses/Convictions**: Under each driver's detailed page
+**DOCUMENT STRUCTURE (4-page format):**
+Page 1: Vehicle 1 details (basic info, drivers list, coverages)
+Page 2: Vehicle 2 details (basic info, drivers list, coverages) 
+Page 3: Driver 1 detailed information (personal info, claims, lapses)
+Page 4: Driver 2 detailed information (personal info, convictions)
 
-**CRITICAL EXTRACTION RULES:**
+**EXTRACTION INSTRUCTIONS:**
 
-**1. Vehicle Information Extraction:**
-- Parse headers like "Vehicle 1 of 2 | Private Passenger - 2025 MERCEDES-BENZ GLE450 4DR AWD"
-- Extract: vehicle_id, vehicle_type, vehicle_year, vehicle_make, vehicle_model
-- Look for VIN in format like "4JGFBSKBXSB352229"
-- Extract Annual km (e.g., "10000"), Daily km (e.g., "5")
-- Extract garaging location (e.g., "THORNHILL L3T0G8")
-- Extract leased status (Yes/No)
+**1. Vehicle Pages Analysis (Pages 1-2):**
+- Header format: "Vehicle X of Y | Private Passenger - YYYY MAKE MODEL (VIN)"
+- Extract: VIN, vehicle year/make/model, annual km, daily km, garaging location, leased status
+- **Vehicle Purchase Information**: Extract Purchase Condition (New/Used/Demo), Purchase Date, List Price New, Winter Tires (Yes/No), Parking at Night
+- Under "Drivers" section: Extract driver names with roles "(Prn)" or "(Occ)"
+- Under "Coverages" section: Extract coverage types and amounts/deductibles
 
-**2. Driver-Vehicle Relationship Mapping:**
-- Find driver names under each vehicle section
-- Parse role indicators: "(Prn)" = Principal, "(Occ)" = Occasional
-- Map each driver to their respective vehicles with correct roles
-- Same driver can appear on multiple vehicles with different roles
+**2. Driver Pages Analysis (Pages 3-4):**
+- Header format: "Driver X of Y | LASTNAME, FIRSTNAME"
+- Extract personal information: birth date, marital status, gender, relationship
+- Extract license information: license number, province, class, G1/G2/G dates
+- Extract insurance history: date insured, current carrier, date with company
+- Parse Claims/Lapses/Convictions sections with dates and details
 
-**3. Driver Personal Information (from individual driver pages):**
-- Parse headers like "Driver 1 of 2 | SURNAME, FIRSTNAME"
-- Extract birth date, convert MM/DD/YYYY to YYYY-MM-DD
-- Extract gender (Male/Female), marital status (Married/Single)
-- Extract relationship to applicant (Applicant/Spouse/etc.)
-- Extract license information:
-  - License number (letter + 14 digits)
-  - License province (ON)
-  - License class (G)
-  - License dates: Date G1, Date G2, Date G (convert to YYYY-MM-DD)
-- Extract insurance history:
-  - Date Insured (convert to YYYY-MM-DD)
-  - Current Carrier name
-  - Date with Company (convert to YYYY-MM-DD)
-- Extract occupation
+**3. Data Privacy & Formatting:**
+- **IMPORTANT**: Use placeholder/anonymized data in the JSON structure below
+- Convert all dates to YYYY-MM-DD format
+- Use "prn" for Principal drivers, "occ" for Occasional drivers
+- Extract exact amounts and deductibles as shown in document
 
-**4. Claims Processing:**
-- Extract from "Claims" sections under each driver
-- Parse description, date, charge status (No = false, Yes = true)
-- Extract vehicle involved
-- Parse payment amounts: TP/BI$, TP/PD$, AB$, Coll$, Other PD$
-
-**5. Lapses Processing:**
-- Extract from "Lapses" sections under each driver
-- Parse description, start date, duration in months
-- Extract re-instate date
-
-**6. Convictions Processing:**
-- Extract from "Convictions" sections under each driver
-- Parse description (usually "Speeding")
-- Extract date, speed in km/h, severity (Minor/Major)
-
-**7. Coverage Information:**
-- Extract from "Coverages" sections under each vehicle
-- Standard coverages: Bodily Injury, Property Damage, Direct Compensation, etc.
-- Parse coverage amounts and deductibles
-
-**EXPECTED JSON OUTPUT FORMAT:**
+**EXPECTED JSON OUTPUT:**
 
 {
   "vehicles": [
     {
       "vehicle_id": "1",
-      "vehicle_type": "Private Passenger",
-      "vin": "EXAMPLE123456789",
-      "vehicle_year": "2025",
-      "vehicle_make": "SAMPLE_MAKE",
-      "vehicle_model": "SAMPLE_MODEL",
-      "garaging_location": "SAMPLE_CITY L0T0G0",
+      "vin": "DOCUMENT_VIN_HERE",
+      "vehicle_year": "YYYY",
+      "vehicle_make": "MAKE_NAME",
+      "vehicle_model": "MODEL_NAME",
+      "garaging_location": "CITY_POSTAL_CODE",
       "leased": false,
       "annual_km": "10000",
-      "business_km": null,
       "daily_km": "5",
       "purchase_condition": "New",
-      "purchase_date": "2025-01-01",
-      "km_at_purchase": "100",
-      "list_price_new": "50000",
-      "purchase_price": null,
+      "purchase_date": "2019-03-01",
+      "list_price_new": "25505",
       "winter_tires": false,
       "parking_at_night": "Underground Parking",
-      "anti_theft": {
-        "device_type": null,
-        "manufacturer": null,
-        "engraving": null
-      },
       "drivers": [
         {
           "name": "SAMPLE_LASTNAME, SAMPLE_FIRSTNAME",
           "role": "prn",
           "birth_date": "1990-01-01",
-          "marital_status": "Married",
           "gender": "Male",
+          "marital_status": "Married",
           "relationship_to_applicant": "Applicant",
-          "licence_number": "S00000000000000",
+          "licence_number": "SAMPLE_LICENSE_123456",
           "licence_province": "ON",
-          "occupation": "Sample Occupation",
           "licence_class": "G",
-          "date_g": "2018-01-01",
-          "date_g2": "2017-01-01",
           "date_g1": "2016-01-01",
-          "date_insured": "2018-01-01",
-          "current_carrier": "Sample Insurance Company",
+          "date_g2": "2017-01-01",
+          "date_g": "2018-01-01",
+          "date_insured": "2019-01-01",
+          "current_carrier": "Sample Insurance Co",
           "date_with_company": "2024-01-01",
+          "occupation": "Sample Occupation",
           "claims": [
             {
               "description": "Sample claim description",
               "date": "2021-01-01",
               "at_fault": false,
-              "vehicle_involved": "2025 SAMPLE_MAKE SAMPLE_MODEL",
-              "tp_bi": null,
-              "tp_pd": "1000",
+              "vehicle_involved": "YYYY MAKE MODEL",
+              "tp_pd": "2420",
               "ab": null,
-              "coll": null,
-              "other_pd": null
+              "coll": null
             }
           ],
           "lapses": [
             {
               "description": "Sample lapse reason",
               "date": "2023-01-01",
-              "duration_months": 2,
-              "re_instate_date": "2023-03-01"
+              "duration_months": 0,
+              "re_instate_date": "2023-01-01"
             }
           ],
+          "convictions": []
+        },
+        {
+          "name": "SAMPLE_LASTNAME2, SAMPLE_FIRSTNAME2", 
+          "role": "occ",
+          "birth_date": "1994-01-01",
+          "gender": "Male",
+          "marital_status": "Married",
+          "relationship_to_applicant": "Spouse",
+          "licence_number": "SAMPLE_LICENSE_789012",
+          "licence_province": "ON",
+          "licence_class": "G",
+          "date_g1": "2016-01-01",
+          "date_g2": "2017-01-01", 
+          "date_g": "2018-01-01",
+          "date_insured": "2018-01-01",
+          "current_carrier": "Sample Insurance Co",
+          "date_with_company": "2024-01-01",
+          "occupation": "Sample Occupation",
+          "claims": [],
+          "lapses": [],
           "convictions": [
             {
               "description": "Speeding",
               "date": "2024-01-01",
-              "kmh": "20",
+              "kmh": "29",
               "severity": "Minor"
             }
           ]
@@ -149,10 +125,6 @@ The document contains multiple sections:
       ],
       "coverages": {
         "bodily_injury": {
-          "covered": true,
-          "amount": "2,000,000"
-        },
-        "property_damage": {
           "covered": true,
           "amount": "2,000,000"
         },
@@ -172,17 +144,10 @@ The document contains multiple sections:
           "comprehensive": {
             "covered": true,
             "deductible": "2,500"
-          },
-          "all_perils": null
+          }
         },
         "uninsured_automobile": {
           "covered": true
-        },
-        "endorsements": {
-          "family_protection": {
-            "covered": true,
-            "amount": "2,000,000"
-          }
         }
       }
     }
@@ -190,22 +155,56 @@ The document contains multiple sections:
   "driver_limit_notice": null
 }
 
-**IMPORTANT NOTES:**
-1. **Data Privacy**: Use generic examples like "SAMPLE_LASTNAME, SAMPLE_FIRSTNAME" in the JSON structure
-2. **Date Format**: All dates must be in YYYY-MM-DD format
-3. **Driver Roles**: Use "prn" for Principal, "occ" for Occasional
-4. **Vehicle Relationships**: Same driver can appear on multiple vehicles with different roles
-5. **Coverage Parsing**: Extract all coverage types and amounts/deductibles
-6. **Claims/Lapses/Convictions**: Group under individual drivers, not vehicles
-7. **Backward Compatibility**: Include individual fields for the first vehicle/driver
+**SPECIFIC EXTRACTION RULES:**
+
+1. **Vehicle Information:**
+   - Extract VIN exactly as shown (typically 17 characters)
+   - Parse vehicle header for year, make, model
+   - Find Annual km and Daily km in usage section
+   - Extract garaging location (city and postal code)
+   - **Purchase Details**: Extract Purchase Condition (New/Used/Demo), Purchase Date (MM/DD/YYYY → YYYY-MM-DD), List Price New (amount only)
+   - **Additional Features**: Extract Winter Tires (Yes/No → true/false), Parking at Night (text description)
+
+2. **Driver Assignments:**
+   - Match driver names from vehicle pages to detailed driver pages
+   - Preserve role assignments (Prn/Occ) for each vehicle
+   - Same driver can appear on multiple vehicles with different roles
+
+3. **Personal Information:**
+   - Parse birth dates and convert MM/DD/YYYY to YYYY-MM-DD
+   - Extract gender (Male/Female), marital status, relationship
+   - Parse license information including all G1/G2/G dates
+
+4. **Claims Processing:**
+   - Parse description, date, and fault status ("No" = false, "Yes" = true)
+   - Extract vehicle involved and payment amounts (TP/PD$, AB$, Coll$)
+   - Include all monetary amounts exactly as shown
+
+5. **Lapses and Convictions:**
+   - Extract descriptions, dates, and durations
+   - For convictions: include speed in km/h and severity level
+   - Parse all date fields consistently
+
+6. **Coverage Information:**
+   - Extract all coverage types with amounts and deductibles
+   - Parse standard coverages: Bodily Injury, Direct Compensation, etc.
+   - Include endorsements like Family Protection with amounts
 
 **PROCESSING STEPS:**
-1. Identify all vehicle sections and extract basic vehicle info
-2. Map drivers to vehicles with their roles
-3. Extract detailed driver information from individual driver pages
-4. Parse claims, lapses, and convictions for each driver
-5. Extract coverage information for each vehicle
-6. Structure data according to the expected JSON format
+1. Identify document pages and their content type (vehicle vs driver)
+2. Extract vehicle basic information from vehicle pages
+3. Parse driver lists and roles from vehicle pages  
+4. Extract detailed driver information from driver pages
+5. Match drivers across vehicles and detailed pages
+6. Parse coverage information for each vehicle
+7. Structure all data according to the JSON format above
+
+**CRITICAL REMINDERS:**
+- Use the ACTUAL data from the document but structure it like the anonymized example
+- Ensure all dates are in YYYY-MM-DD format
+- Preserve exact amounts and deductibles from the document
+- Match driver names consistently across vehicle and driver pages
+- Include all claims, lapses, and convictions found in the document
 
 Return only the raw JSON string without any markdown formatting or explanations.
 `;

@@ -41,9 +41,16 @@ export function useDocumentProcessing() {
     application: { data: null, loading: false, error: null, uploaded: false, cached: false, cachedFile: null }
   });
   
-  // Batch processing state
+  // Data extraction state
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingStep, setProcessingStep] = useState<DocumentType | null>(null);
+
+  // Validation state - 新增验证相关状态
+  const [isValidating, setIsValidating] = useState(false);
+  const [validationStep, setValidationStep] = useState<string | null>(null);
+  const [hasValidated, setHasValidated] = useState(false);
+  const [validationResults, setValidationResults] = useState<Record<string, any>>({});
+  const [validationKey, setValidationKey] = useState(0);
 
   // 支持多文件的文档类型
   const MULTI_FILE_TYPES: DocumentType[] = ['mvr', 'autoplus'];
@@ -264,14 +271,7 @@ export function useDocumentProcessing() {
   };
 
   // Validate all extracted documents (local business rules)
-  const validateDocuments = () => {
-    // This will trigger re-rendering of BusinessRulesValidation component
-    // which automatically validates all uploaded documents
-    // No additional logic needed here as validation is reactive
-    console.log('Validation triggered for all extracted documents');
-  };
-
-  // 智能处理所有文档（单文件 + 多文件）
+  // 智能处理所有文档（单文件 + 多文件）- 仅数据提取，不包含验证
   const processDocuments = async () => {
     setIsProcessing(true);
 
@@ -311,16 +311,56 @@ export function useDocumentProcessing() {
         }
       }
 
-      // 4. 处理完成，触发验证
+      // 4. 数据提取完成
       setProcessingStep(null);
-      validateDocuments();
-      console.log('All documents processed successfully!');
+      console.log('All documents processed successfully! Ready for validation.');
 
     } catch (error) {
       console.error("Document processing error:", error);
     } finally {
       setIsProcessing(false);
       setProcessingStep(null);
+    }
+  };
+
+  // 验证所有已提取的文档数据 - 新的独立验证函数
+  const validateDocuments = async () => {
+    // 检查是否有已提取的数据
+    const hasExtractedData = Object.values(documents).some(doc => doc.data && doc.uploaded);
+    
+    if (!hasExtractedData) {
+      console.warn('No extracted data found. Please extract document data first.');
+      return;
+    }
+
+    setIsValidating(true);
+    setValidationStep('Initializing validation...');
+    
+    try {
+      console.log('Starting business rules validation...');
+      
+      // 重置之前的验证结果
+      setValidationResults({});
+      setHasValidated(false);
+      
+      // 递增validationKey以触发所有验证组件重新验证
+      setValidationKey(prev => prev + 1);
+      
+      // 这里不需要实际的API调用，因为验证逻辑在 BusinessRulesValidation 组件中
+      // 我们只需要设置状态来触发组件重新验证
+      setValidationStep('Running business rules...');
+      
+      // 模拟验证过程的延迟
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      setHasValidated(true);
+      console.log('Business rules validation initiated successfully!');
+      
+    } catch (error) {
+      console.error("Validation error:", error);
+    } finally {
+      setIsValidating(false);
+      setValidationStep(null);
     }
   };
 
@@ -569,16 +609,70 @@ export function useDocumentProcessing() {
     }
   };
 
+  // 重新处理单文档（Quote和Application使用）
+  const reprocessSingleDocument = async (type: DocumentType) => {
+    const cachedFile = documents[type].cachedFile;
+    if (!cachedFile) return;
+
+    console.log(`Reprocessing single document: ${type}`);
+    
+    // 重置文档状态，保留缓存文件
+    setDocuments(prev => ({
+      ...prev,
+      [type]: { 
+        ...prev[type], 
+        loading: true, 
+        error: null,
+        uploaded: false,
+        data: null
+      }
+    }));
+
+    try {
+      const data = await DocumentService.processDocument(type, cachedFile);
+      setDocuments(prev => ({
+        ...prev,
+        [type]: { 
+          ...prev[type],
+          data: data, 
+          loading: false, 
+          error: null, 
+          uploaded: true 
+        }
+      }));
+    } catch (err) {
+      setDocuments(prev => ({
+        ...prev,
+        [type]: { 
+          ...prev[type],
+          loading: false, 
+          error: err instanceof Error ? err.message : "Processing failed"
+        }
+      }));
+    }
+  };
+
   return {
     documents,
+    // Data extraction state
     isProcessing,
     processingStep,
+    // Validation state
+    isValidating,
+    validationStep,
+    hasValidated,
+    validationResults,
+    validationKey,
+    // Functions
     handleFileUpload,
     processDocuments,
+    validateDocuments,
     // 多文件相关功能
     handleMultiFileUpload,
     handleFileDelete,
     // 单文件重新处理
-    reprocessSingleFile
+    reprocessSingleFile,
+    // 单文档重新处理
+    reprocessSingleDocument
   };
 } 

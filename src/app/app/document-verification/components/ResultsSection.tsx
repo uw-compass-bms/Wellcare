@@ -8,13 +8,22 @@ interface ResultsSectionProps {
   onReprocessDocument?: (type: DocumentType) => Promise<void>;
   isProcessing?: boolean;
   processingStep?: DocumentType | null;
+  // Validation related props
+  isValidating?: boolean;
+  validationStep?: string | null;
+  hasValidated?: boolean;
+  validationKey?: number;
 }
 
 export default function ResultsSection({ 
   documents, 
   onReprocessDocument, 
   isProcessing, 
-  processingStep 
+  processingStep,
+  isValidating = false,
+  validationStep = null,
+  hasValidated = false,
+  validationKey = 0
 }: ResultsSectionProps) {
   // Check if any documents have data, are loading, or have errors - 支持实时显示
   const hasDocumentActivity = Object.values(documents).some(doc => 
@@ -34,7 +43,11 @@ export default function ResultsSection({
       />
       
       {/* Business rules validation */}
-      <BusinessRulesValidation documents={documents} />
+      <BusinessRulesValidation 
+        documents={documents} 
+        shouldValidate={hasValidated || isValidating}
+        validationKey={validationKey}
+      />
     </div>
   );
 } 

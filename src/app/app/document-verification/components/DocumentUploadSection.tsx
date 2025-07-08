@@ -12,6 +12,8 @@ interface DocumentUploadSectionProps {
   onMultiFileUpload?: (files: File[], type: DocumentType) => Promise<void>;
   onFileDelete?: (fileId: string | undefined, type: DocumentType) => void;
   onFileReprocess?: (fileId: string, type: DocumentType) => Promise<void>;
+  // 单文件重新处理（Quote和Application使用）
+  onSingleFileReprocess?: (type: DocumentType) => Promise<void>;
 }
 
 export default function DocumentUploadSection({ 
@@ -19,7 +21,8 @@ export default function DocumentUploadSection({
   onFileUpload,
   onMultiFileUpload,
   onFileDelete,
-  onFileReprocess
+  onFileReprocess,
+  onSingleFileReprocess
 }: DocumentUploadSectionProps) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
@@ -39,11 +42,13 @@ export default function DocumentUploadSection({
         documentState={documents.quote}
         onFileUpload={(file: File) => onFileUpload(file, 'quote')}
         onFileDelete={() => onFileDelete && onFileDelete(undefined, 'quote')}
+        onFileReprocess={() => onSingleFileReprocess ? onSingleFileReprocess('quote') : Promise.resolve()}
       />
       <ApplicationUploader 
         documentState={documents.application}
         onFileUpload={(file: File) => onFileUpload(file, 'application')}
         onFileDelete={() => onFileDelete && onFileDelete(undefined, 'application')}
+        onFileReprocess={() => onSingleFileReprocess ? onSingleFileReprocess('application') : Promise.resolve()}
       />
     </div>
   );

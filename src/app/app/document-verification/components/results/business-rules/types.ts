@@ -175,6 +175,8 @@ export interface BusinessRuleProps {
     quote?: Record<string, unknown>;
   };
   onResultChange?: (result: BusinessRuleResult) => void;
+  shouldValidate?: boolean; // 控制是否应该开始验证
+  validationKey?: number; // 用于重新触发验证
 }
 
 // 规则状态对应的样式配置

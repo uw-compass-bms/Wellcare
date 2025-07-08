@@ -2,33 +2,39 @@
 import React from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Loader2, Play } from 'lucide-react';
+import { Loader2, Play, CheckSquare, FileCheck } from 'lucide-react';
 import { DocumentType, DocumentState } from '../types';
 
 interface ProcessingControlPanelProps {
   documents: Record<DocumentType, DocumentState>;
   isProcessing: boolean;
   processingStep: DocumentType | null;
+  isValidating: boolean;
+  validationStep: string | null;
+  hasValidated: boolean;
   onProcessDocuments: () => void;
+  onValidateDocuments: () => void;
 }
 
 export default function ProcessingControlPanel({ 
   documents, 
   isProcessing, 
-  processingStep, 
-  onProcessDocuments
+  processingStep,
+  isValidating,
+  validationStep,
+  hasValidated,
+  onProcessDocuments,
+  onValidateDocuments
 }: ProcessingControlPanelProps) {
   
   // 计算是否有文件需要处理
   const hasUploadedFiles = Object.values(documents).some(doc => doc.cached || doc.uploaded);
   const hasPendingFiles = Object.values(documents).some(doc => doc.cached && !doc.uploaded);
+  const hasExtractedData = Object.values(documents).some(doc => doc.data && doc.uploaded);
   
   // 如果没有上传文件，不显示面板
   if (!hasUploadedFiles) return null;
   
-  // 如果所有文档都已处理完成，隐藏面板
-  if (hasUploadedFiles && !hasPendingFiles && !isProcessing) return null;
-
   // 获取处理状态描述
   const getProcessingDescription = () => {
     if (isProcessing && processingStep) {
@@ -38,41 +44,84 @@ export default function ProcessingControlPanel({
         quote: 'Quote',
         application: 'Application'
       };
-      return `Processing ${stepNames[processingStep]}...`;
+      return `Extracting data from ${stepNames[processingStep]}...`;
     }
-    return "Ready to process documents";
+    if (isValidating && validationStep) {
+      return validationStep;
+    }
+    if (hasExtractedData && !hasValidated) {
+      return "Data extracted successfully. Ready for validation.";
+    }
+    if (hasValidated) {
+      return "Validation completed. View results below.";
+    }
+    return "Upload documents and extract data using AI analysis";
   };
 
   return (
     <Card className="mb-8">
       <CardHeader>
-        <CardTitle>Intelligent Document Processing</CardTitle>
+        <CardTitle>Document Processing & Validation</CardTitle>
         <CardDescription>
-          {isProcessing ? getProcessingDescription() : "Automatically detects and processes single/multi-file documents using AI analysis"}
+          {getProcessingDescription()}
         </CardDescription>
       </CardHeader>
       <CardContent>
-        {/* 智能文档处理按钮 */}
-        <div className="flex justify-center">
+        <div className="flex flex-col sm:flex-row gap-4 justify-center">
+          {/* Extract Data Button */}
           <Button 
             onClick={onProcessDocuments}
-            disabled={isProcessing || !hasPendingFiles}
+            disabled={isProcessing || isValidating || !hasPendingFiles}
             size="lg"
             className="min-w-[200px]"
+            variant={hasExtractedData ? "outline" : "default"}
           >
             {isProcessing ? (
               <>
                 <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                Processing...
+                Extracting...
               </>
             ) : (
               <>
-                <Play className="w-5 h-5 mr-2" />
-                Process All Documents
+                <FileCheck className="w-5 h-5 mr-2" />
+                Extract Data
               </>
             )}
           </Button>
+
+          {/* Validate & Cross-Check Button */}
+          {hasExtractedData && (
+            <Button 
+              onClick={onValidateDocuments}
+              disabled={isProcessing || isValidating || !hasExtractedData}
+              size="lg"
+              className="min-w-[200px]"
+              variant={hasValidated ? "outline" : "default"}
+            >
+              {isValidating ? (
+                <>
+                  <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                  Validating...
+                </>
+              ) : (
+                <>
+                  <CheckSquare className="w-5 h-5 mr-2" />
+                  {hasValidated ? 'Re-validate' : 'Validate & Cross-Check'}
+                </>
+              )}
+            </Button>
+          )}
         </div>
+
+        {/* Status indicators */}
+        {(isProcessing || isValidating) && (
+          <div className="mt-4 text-center">
+            <div className="text-sm text-gray-600">
+              {isProcessing && processingStep && `Processing ${processingStep.toUpperCase()}...`}
+              {isValidating && validationStep}
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
