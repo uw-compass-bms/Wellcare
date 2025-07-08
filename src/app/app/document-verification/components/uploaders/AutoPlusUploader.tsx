@@ -8,13 +8,15 @@ interface AutoPlusUploaderProps {
   onFileUpload: (file: File) => Promise<void>;
   onMultiFileUpload: (files: File[]) => Promise<void>;
   onFileDelete: (fileId: string) => void;
+  onFileReprocess?: (fileId: string) => Promise<void>;
 }
 
 export default function AutoPlusUploader({ 
   documentState, 
   onFileUpload,
   onMultiFileUpload,
-  onFileDelete
+  onFileDelete,
+  onFileReprocess
 }: AutoPlusUploaderProps) {
   return (
     <MultiFileUploader
@@ -22,6 +24,7 @@ export default function AutoPlusUploader({
       onFileUpload={onFileUpload}
       onMultiFileUpload={onMultiFileUpload}
       onFileDelete={onFileDelete}
+      onFileReprocess={onFileReprocess}
       title="Auto+ Documents"
       description="Insurance history records"
       icon={Car}

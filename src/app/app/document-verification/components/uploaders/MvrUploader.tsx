@@ -8,13 +8,15 @@ interface MvrUploaderProps {
   onFileUpload: (file: File) => Promise<void>;
   onMultiFileUpload: (files: File[]) => Promise<void>;
   onFileDelete: (fileId: string) => void;
+  onFileReprocess?: (fileId: string) => Promise<void>;
 }
 
 export default function MvrUploader({ 
   documentState, 
   onFileUpload,
   onMultiFileUpload,
-  onFileDelete
+  onFileDelete,
+  onFileReprocess
 }: MvrUploaderProps) {
   return (
     <MultiFileUploader
@@ -22,6 +24,7 @@ export default function MvrUploader({
       onFileUpload={onFileUpload}
       onMultiFileUpload={onMultiFileUpload}
       onFileDelete={onFileDelete}
+      onFileReprocess={onFileReprocess}
       title="MVR Documents"
       description="Motor Vehicle Records"
       icon={Shield}

@@ -114,6 +114,15 @@ export function useDocumentProcessing() {
     for (const file of files) {
       try {
         const cachedFileWithId = await DocumentService.createCachedFileWithId(file);
+        
+        // 添加文件状态信息
+        const fileWithStatus = {
+          ...cachedFileWithId,
+          isProcessed: false,
+          lastModified: file.lastModified,
+          extractedData: null,
+          error: undefined
+        };
 
         setDocuments(prev => ({
           ...prev,
@@ -126,7 +135,7 @@ export function useDocumentProcessing() {
               ...prev[type].multiFileState!,
               files: {
                 ...prev[type].multiFileState!.files,
-                [cachedFileWithId.fileId]: cachedFileWithId
+                [fileWithStatus.fileId]: fileWithStatus
               }
             }
           }
@@ -160,11 +169,16 @@ export function useDocumentProcessing() {
       const newErrors = { ...prev[type].multiFileState!.errors };
       delete newErrors[fileId];
 
+      // 如果没有文件了，重置整个状态
+      const hasFiles = Object.keys(newFiles).length > 0;
+
       return {
         ...prev,
         [type]: {
           ...prev[type],
-          cached: Object.keys(newFiles).length > 0,
+          cached: hasFiles,
+          uploaded: hasFiles ? prev[type].uploaded : false,
+          data: hasFiles ? prev[type].data : null,
           multiFileState: {
             files: newFiles,
             processingFiles: newProcessingFiles,
@@ -174,6 +188,17 @@ export function useDocumentProcessing() {
         }
       };
     });
+
+    // 如果还有其他文件，重新合并数据
+    setTimeout(() => {
+      setDocuments(prev => {
+        const remainingFiles = Object.keys(prev[type].multiFileState?.files || {}).filter(id => id !== fileId);
+        if (remainingFiles.length > 0) {
+          mergeMultiFileData(type);
+        }
+        return prev;
+      });
+    }, 100);
   };
 
   // 删除单文件（Quote和Application使用）
@@ -251,22 +276,20 @@ export function useDocumentProcessing() {
     setIsProcessing(true);
 
     try {
-      // 1. 处理MVR多文件（如果存在）
+      // 1. 处理MVR文件（支持多文件和单文件）
       if (documents.mvr.isMultiFile && documents.mvr.multiFileState && 
-          Object.keys(documents.mvr.multiFileState.files).length > 0 && 
-          !documents.mvr.uploaded) {
+          Object.keys(documents.mvr.multiFileState.files).length > 0) {
         setProcessingStep('mvr');
-        console.log('Processing MVR multi-files...');
+        console.log('Processing MVR files...');
         await processMultiFiles('mvr');
         await new Promise(resolve => setTimeout(resolve, 1000));
       }
 
-      // 2. 处理Auto+多文件（如果存在）
+      // 2. 处理Auto+文件（支持多文件和单文件）
       if (documents.autoplus.isMultiFile && documents.autoplus.multiFileState && 
-          Object.keys(documents.autoplus.multiFileState.files).length > 0 && 
-          !documents.autoplus.uploaded) {
+          Object.keys(documents.autoplus.multiFileState.files).length > 0) {
         setProcessingStep('autoplus');
-        console.log('Processing Auto+ multi-files...');
+        console.log('Processing Auto+ files...');
         await processMultiFiles('autoplus');
         await new Promise(resolve => setTimeout(resolve, 1000));
       }
@@ -301,14 +324,134 @@ export function useDocumentProcessing() {
     }
   };
 
-  // 处理多文件提取（MVR和AutoPlus使用）
+  // 处理单个文件（多文件中的一个文件）
+  const processSingleFileInMulti = async (fileId: string, docType: DocumentType) => {
+    const multiState = documents[docType].multiFileState!;
+    const file = multiState.files[fileId];
+    
+    if (!file) return;
+
+    // 标记该文件为处理中
+    setDocuments(prev => ({
+      ...prev,
+      [docType]: {
+        ...prev[docType],
+        multiFileState: {
+          ...prev[docType].multiFileState!,
+          processingFiles: new Set([...prev[docType].multiFileState!.processingFiles, fileId]),
+          files: {
+            ...prev[docType].multiFileState!.files,
+            [fileId]: {
+              ...prev[docType].multiFileState!.files[fileId],
+              error: undefined
+            }
+          }
+        }
+      }
+    }));
+
+    try {
+      console.log(`Processing individual file: ${file.fileName} (${fileId})`);
+      
+      // 调用单文件API（POST方法）
+      const apiEndpoint = docType === 'mvr' 
+        ? '/api/document-extraction/mvr' 
+        : '/api/document-extraction/autoplus';
+      
+      const response = await fetch(apiEndpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          b64data: file.b64data,
+          fileName: file.fileName,
+          fileSize: file.fileSize,
+          fileType: file.fileType
+        })
+      });
+
+      const result = await response.json();
+
+      if (!result.success) {
+        throw new Error(result.error || 'File processing failed');
+      }
+
+      // 更新文件状态为已处理
+      setDocuments(prev => ({
+        ...prev,
+        [docType]: {
+          ...prev[docType],
+          multiFileState: {
+            ...prev[docType].multiFileState!,
+            processingFiles: new Set([...prev[docType].multiFileState!.processingFiles].filter(id => id !== fileId)),
+            processedFiles: new Set([...prev[docType].multiFileState!.processedFiles, fileId]),
+            files: {
+              ...prev[docType].multiFileState!.files,
+              [fileId]: {
+                ...prev[docType].multiFileState!.files[fileId],
+                isProcessed: true,
+                extractedData: result.data,
+                error: undefined
+              }
+            }
+          }
+        }
+      }));
+
+      console.log(`Successfully processed file: ${file.fileName}`);
+      return result.data;
+
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+      console.error(`Error processing file ${file.fileName}:`, errorMessage);
+      
+      // 更新文件错误状态
+      setDocuments(prev => ({
+        ...prev,
+        [docType]: {
+          ...prev[docType],
+          multiFileState: {
+            ...prev[docType].multiFileState!,
+            processingFiles: new Set([...prev[docType].multiFileState!.processingFiles].filter(id => id !== fileId)),
+            files: {
+              ...prev[docType].multiFileState!.files,
+              [fileId]: {
+                ...prev[docType].multiFileState!.files[fileId],
+                isProcessed: false,
+                error: errorMessage
+              }
+            }
+          }
+        }
+      }));
+      
+      throw err;
+    }
+  };
+
+  // 处理多文件提取（MVR和AutoPlus使用） - 修改为逐个处理
   const processMultiFiles = async (docType: DocumentType = 'mvr') => {
     const multiState = documents[docType].multiFileState!;
     const filesList = Object.values(multiState.files);
     
     if (filesList.length === 0) return;
 
-    // 设置处理状态
+    // 只处理未处理的文件或有错误需要重试的文件
+    const filesToProcess = filesList.filter(file => 
+      !file.isProcessed || file.error
+    );
+
+    if (filesToProcess.length === 0) {
+      console.log('All files already processed, skipping...');
+      // 如果所有文件都已处理，只需要合并数据
+      await mergeMultiFileData(docType);
+      return;
+    }
+
+    console.log(`Processing ${filesToProcess.length} files out of ${filesList.length} total files`);
+
+    // 设置整体处理状态
     setDocuments(prev => ({
       ...prev,
       [docType]: {
@@ -318,78 +461,111 @@ export function useDocumentProcessing() {
       }
     }));
 
-    try {
-      // 构建多文件API请求
-      const filesData = filesList.map(file => ({
-        fileId: file.fileId,
-        fileName: file.fileName,
-        b64data: file.b64data
-      }));
+    const processedResults = [];
+    let hasErrors = false;
 
-      // 标记所有文件为处理中
-      setDocuments(prev => ({
-        ...prev,
-        [docType]: {
-          ...prev[docType],
-          multiFileState: {
-            ...prev[docType].multiFileState!,
-            processingFiles: new Set(filesList.map(f => f.fileId)),
-            errors: {} // 清除之前的错误
-          }
+    // 逐个处理文件
+    for (const file of filesToProcess) {
+      try {
+        const result = await processSingleFileInMulti(file.fileId, docType);
+        processedResults.push(result);
+        
+        // 在文件之间添加延迟，避免API限制
+        if (filesToProcess.length > 1) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
         }
-      }));
+      } catch (error) {
+        hasErrors = true;
+        console.error(`Failed to process file ${file.fileName}:`, error);
+      }
+    }
 
-      // 调用多文件API
-      const apiEndpoint = docType === 'mvr' 
-        ? '/api/document-extraction/mvr' 
-        : '/api/document-extraction/autoplus';
-      
-      const response = await fetch(apiEndpoint, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ files: filesData })
-      });
+    // 合并所有已处理文件的数据
+    await mergeMultiFileData(docType);
 
-      const result = await response.json();
+    // 更新整体状态
+    setDocuments(prev => ({
+      ...prev,
+      [docType]: {
+        ...prev[docType],
+        loading: false,
+        uploaded: !hasErrors, // 只有在没有错误时才标记为已上传
+        error: hasErrors ? 'Some files failed to process' : null
+      }
+    }));
+  };
 
-      if (!result.success) {
-        throw new Error(result.error || '多文件处理失败');
+  // 合并多文件数据
+  const mergeMultiFileData = async (docType: DocumentType) => {
+    setDocuments(prev => {
+      const multiState = prev[docType].multiFileState!;
+      const processedFiles = Object.values(multiState.files).filter(file => 
+        file.isProcessed && file.extractedData
+      );
+
+      if (processedFiles.length === 0) {
+        return prev;
       }
 
-      // 更新处理状态
-      setDocuments(prev => ({
-        ...prev,
-        [docType]: {
-          ...prev[docType],
-          data: result.data,
-          loading: false,
-          uploaded: true,
-          multiFileState: {
-            ...prev[docType].multiFileState!,
-            processingFiles: new Set(),
-            processedFiles: new Set(filesList.map(f => f.fileId)),
-            errors: result.metadata?.errors ? 
-              Object.fromEntries(result.metadata.errors.map((e: {fileId: string; error: string}) => [e.fileId, e.error])) : {}
-          }
-        }
+      // 构建多文件数据结构
+      const extractedDataList = processedFiles.map(file => ({
+        ...file.extractedData,
+        file_name: file.fileName,
+        file_id: file.fileId
       }));
 
-    } catch (err) {
-      // 处理失败，清除处理状态
-      setDocuments(prev => ({
+      const multiData = {
+        // 使用第一个成功记录的基本信息作为默认值
+        ...extractedDataList[0],
+        // 多文件记录
+        records: extractedDataList
+      };
+
+      // 更新合并后的数据
+      return {
         ...prev,
         [docType]: {
           ...prev[docType],
-          loading: false,
-          error: err instanceof Error ? err.message : '多文件处理失败',
-          multiFileState: {
-            ...prev[docType].multiFileState!,
-            processingFiles: new Set()
+          data: multiData
+        }
+      };
+    });
+  };
+
+  // 重新处理单个文件
+  const reprocessSingleFile = async (fileId: string, type: DocumentType) => {
+    if (!MULTI_FILE_TYPES.includes(type)) return;
+    
+    const file = documents[type].multiFileState?.files[fileId];
+    if (!file) return;
+
+    console.log(`Reprocessing single file: ${file.fileName}`);
+    
+    // 重置文件状态
+    setDocuments(prev => ({
+      ...prev,
+      [type]: {
+        ...prev[type],
+        multiFileState: {
+          ...prev[type].multiFileState!,
+          files: {
+            ...prev[type].multiFileState!.files,
+            [fileId]: {
+              ...prev[type].multiFileState!.files[fileId],
+              isProcessed: false,
+              error: undefined,
+              extractedData: null
+            }
           }
         }
-      }));
+      }
+    }));
+
+    try {
+      await processSingleFileInMulti(fileId, type);
+      await mergeMultiFileData(type);
+    } catch (error) {
+      console.error(`Failed to reprocess file ${file.fileName}:`, error);
     }
   };
 
@@ -401,6 +577,8 @@ export function useDocumentProcessing() {
     processDocuments,
     // 多文件相关功能
     handleMultiFileUpload,
-    handleFileDelete
+    handleFileDelete,
+    // 单文件重新处理
+    reprocessSingleFile
   };
 } 

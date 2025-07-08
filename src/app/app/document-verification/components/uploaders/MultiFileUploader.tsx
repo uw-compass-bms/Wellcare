@@ -2,7 +2,7 @@
 import React, { useState, useRef } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { CheckCircle, Loader2, Upload, Clock, LucideIcon, Trash2, X } from 'lucide-react';
+import { CheckCircle, Loader2, Upload, Clock, LucideIcon, Trash2, X, RotateCcw } from 'lucide-react';
 import { DocumentState, CachedFileWithId } from '../../types';
 
 interface MultiFileUploaderProps {
@@ -10,6 +10,7 @@ interface MultiFileUploaderProps {
   onFileUpload: (file: File) => Promise<void>;
   onMultiFileUpload: (files: File[]) => Promise<void>;
   onFileDelete: (fileId: string) => void;
+  onFileReprocess?: (fileId: string) => Promise<void>;
   title: string;
   description: string;
   icon: LucideIcon;
@@ -22,6 +23,7 @@ export default function MultiFileUploader({
   onFileUpload,
   onMultiFileUpload,
   onFileDelete,
+  onFileReprocess,
   title,
   description,
   icon: Icon,
@@ -36,7 +38,8 @@ export default function MultiFileUploader({
   const multiState = documentState.multiFileState;
   const fileList = Object.values(multiState?.files || {});
   const hasFiles = fileList.length > 0;
-  const isLoading = documentState.loading || (multiState?.processingFiles.size || 0) > 0;
+  const processingFiles = fileList.filter(f => multiState?.processingFiles.has(f.fileId) || false);
+  const isLoading = documentState.loading || processingFiles.length > 0;
   const hasUploaded = documentState.uploaded;
   const hasError = !!documentState.error;
 
@@ -75,9 +78,9 @@ export default function MultiFileUploader({
 
   // 获取文件状态
   const getFileStatus = (file: CachedFileWithId) => {
-    if (multiState?.errors[file.fileId]) return 'error';
+    if (file.error) return 'error';
     if (multiState?.processingFiles.has(file.fileId)) return 'processing';
-    if (multiState?.processedFiles.has(file.fileId)) return 'processed';
+    if (file.isProcessed && file.extractedData) return 'processed';
     return 'uploaded';
   };
 
@@ -145,9 +148,25 @@ export default function MultiFileUploader({
 
   // 获取状态描述
   const getStatusDescription = () => {
-    if (hasUploaded) return `${fileList.length} records extracted`;
-    if (hasFiles) return `${fileList.length} files uploaded, ready for processing`;
-    if (isLoading) return 'Processing files...';
+    if (hasFiles) {
+      const processedCount = fileList.filter(f => f.isProcessed).length;
+      const errorCount = fileList.filter(f => f.error).length;
+      const processingCount = processingFiles.length;
+      
+      if (processingCount > 0) {
+        return `Processing ${processingCount} of ${fileList.length} files...`;
+      }
+      if (errorCount > 0) {
+        return `${processedCount} processed, ${errorCount} errors, ${fileList.length - processedCount - errorCount} pending`;
+      }
+      if (processedCount === fileList.length) {
+        return `${processedCount} records extracted`;
+      }
+      if (processedCount > 0) {
+        return `${processedCount} processed, ${fileList.length - processedCount} pending`;
+      }
+      return `${fileList.length} files uploaded, ready for processing`;
+    }
     return `Upload multiple ${title.toLowerCase()}`;
   };
 
@@ -197,46 +216,70 @@ export default function MultiFileUploader({
         {hasFiles && (
           <div className="space-y-2">
             <h4 className="font-medium text-sm text-gray-700">Uploaded Files:</h4>
-            <div className="space-y-2 max-h-40 overflow-y-auto">
-              {fileList.map((file) => (
-                <div key={file.fileId} className={`flex items-center justify-between p-2 rounded-lg border ${getFileStatusColor(file)}`}>
-                  <div className="flex items-center space-x-2 flex-1 min-w-0">
-                    {getFileStatusIcon(file)}
-                    <span className="text-sm font-medium truncate">{file.fileName}</span>
-                    <span className="text-xs text-gray-500">
-                      {(file.fileSize / 1024).toFixed(1)} KB
-                    </span>
+            <div className="space-y-2 max-h-60 overflow-y-auto">
+              {fileList.map((file) => {
+                const status = getFileStatus(file);
+                const isProcessing = multiState?.processingFiles.has(file.fileId) || false;
+                
+                return (
+                  <div key={file.fileId} className={`p-3 rounded-lg border ${getFileStatusColor(file)}`}>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2 flex-1 min-w-0">
+                        {getFileStatusIcon(file)}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center space-x-2">
+                            <span className="text-sm font-medium truncate">{file.fileName}</span>
+                            <span className="text-xs text-gray-500">
+                              {(file.fileSize / 1024).toFixed(1)} KB
+                            </span>
+                          </div>
+                          {/* 状态文本 */}
+                          <div className="text-xs text-gray-600 mt-1">
+                            {status === 'processing' && 'Processing...'}
+                            {status === 'processed' && 'Data extracted'}
+                            {status === 'error' && `Error: ${file.error}`}
+                            {status === 'uploaded' && 'Ready for processing'}
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {/* 操作按钮 */}
+                      <div className="flex items-center space-x-1 ml-2">
+                        {/* 重新处理按钮 */}
+                        {(status === 'error' || status === 'processed') && onFileReprocess && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => onFileReprocess(file.fileId)}
+                            disabled={isProcessing}
+                            className="h-8 w-8 p-0 hover:bg-blue-100"
+                            title="Reprocess file"
+                          >
+                            <RotateCcw className="w-3 h-3 text-blue-600" />
+                          </Button>
+                        )}
+                        
+                        {/* 删除按钮 */}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => onFileDelete(file.fileId)}
+                          disabled={isProcessing}
+                          className="h-8 w-8 p-0 hover:bg-red-100"
+                          title="Delete file"
+                        >
+                          <Trash2 className="w-3 h-3 text-red-600" />
+                        </Button>
+                      </div>
+                    </div>
                   </div>
-                  {/* 删除按钮 */}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => onFileDelete(file.fileId)}
-                    disabled={multiState?.processingFiles.has(file.fileId)}
-                    className="h-8 w-8 p-0 hover:bg-red-100"
-                    title="Delete file"
-                  >
-                    <Trash2 className="w-3 h-3 text-red-600" />
-                  </Button>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
 
-        {/* 文件错误信息 */}
-        {multiState && Object.keys(multiState.errors).length > 0 && (
-          <div className="space-y-1">
-            {Object.entries(multiState.errors).map(([fileId, error]) => {
-              const file = multiState.files[fileId];
-              return (
-                <div key={fileId} className="p-2 bg-red-50 border border-red-200 rounded text-xs text-red-700">
-                  <strong>{file?.fileName || 'Unknown file'}:</strong> {error}
-                </div>
-              );
-            })}
-          </div>
-        )}
+
 
         {/* 全局错误信息 */}
         {documentState.error && (

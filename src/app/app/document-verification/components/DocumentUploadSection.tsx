@@ -11,13 +11,15 @@ interface DocumentUploadSectionProps {
   // 多文件支持（MVR和AutoPlus使用）
   onMultiFileUpload?: (files: File[], type: DocumentType) => Promise<void>;
   onFileDelete?: (fileId: string | undefined, type: DocumentType) => void;
+  onFileReprocess?: (fileId: string, type: DocumentType) => Promise<void>;
 }
 
 export default function DocumentUploadSection({ 
   documents, 
   onFileUpload,
   onMultiFileUpload,
-  onFileDelete
+  onFileDelete,
+  onFileReprocess
 }: DocumentUploadSectionProps) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
@@ -26,12 +28,14 @@ export default function DocumentUploadSection({
         onFileUpload={(file: File) => onFileUpload(file, 'mvr')}
         onMultiFileUpload={(files: File[]) => onMultiFileUpload ? onMultiFileUpload(files, 'mvr') : Promise.resolve()}
         onFileDelete={(fileId: string) => onFileDelete && onFileDelete(fileId, 'mvr')}
+        onFileReprocess={(fileId: string) => onFileReprocess ? onFileReprocess(fileId, 'mvr') : Promise.resolve()}
       />
       <AutoPlusUploader 
         documentState={documents.autoplus}
         onFileUpload={(file: File) => onFileUpload(file, 'autoplus')}
         onMultiFileUpload={(files: File[]) => onMultiFileUpload ? onMultiFileUpload(files, 'autoplus') : Promise.resolve()}
         onFileDelete={(fileId: string) => onFileDelete && onFileDelete(fileId, 'autoplus')}
+        onFileReprocess={(fileId: string) => onFileReprocess ? onFileReprocess(fileId, 'autoplus') : Promise.resolve()}
       />
       <QuoteUploader 
         documentState={documents.quote}

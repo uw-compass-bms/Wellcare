@@ -428,6 +428,11 @@ export interface CachedFile {
 // 多文件缓存类型（用于MVR）
 export interface CachedFileWithId extends CachedFile {
   fileId: string;
+  // 文件处理状态
+  isProcessed?: boolean; // 是否已经处理过
+  lastModified?: number; // 文件最后修改时间，用于检测变化
+  extractedData?: any; // 提取的数据
+  error?: string; // 处理错误信息
 }
 
 // 多文件上传状态
