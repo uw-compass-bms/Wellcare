@@ -124,18 +124,36 @@ export interface G1StartDateResult {
   date_difference_days: number | null;
 }
 
+// 单车辆年龄验证结果
+export interface SingleVehicleAgeResult {
+  vehicle_id: string;
+  vehicle_info?: string;
+  vehicle_year: string | null;
+  vehicle_age: number | null;
+  coverage_details?: {
+    comprehensive: boolean;
+    collision: boolean;
+    all_perils: boolean;
+  };
+  status: 'passed' | 'requires_review';
+  recommendation: string;
+}
+
 // 车辆年龄与保险覆盖验证结果
 export interface VehicleAgeResult {
+  // 向后兼容字段
   vehicle_year?: string | null;
-    vehicle_age?: number;
-  current_year?: number;
+  vehicle_age?: number | null;
   coverage_details?: {
-    liability?: string | null;
     comprehensive?: boolean;
     collision?: boolean;
     all_perils?: boolean;
   };
-  risk_level?: 'high' | 'medium' | 'low';
+  
+  // 多车辆字段
+  vehicles?: SingleVehicleAgeResult[];
+  total_vehicles?: number;
+  requires_review_vehicles?: number;
 }
 
 export interface BusinessRuleResult {
