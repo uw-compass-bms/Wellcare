@@ -1,14 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-// 驾驶员数据类型
-interface DriverData {
-  name?: string;
-  licence_number?: string;
-  first_insurance_date?: string;
-  date_insured?: string;
-  date_with_company?: string;
-}
-
 // 请求数据类型定义
 interface NewDriverValidationRequest {
   quote?: {

@@ -29,7 +29,7 @@ export default function AnnualMileageValidation({ documents, onResultChange }: B
             annual_mileage: quote.annual_mileage,
             commute_distance: quote.commute_distance,
             // 多车辆数据
-            vehicles: quote.vehicles?.map((vehicle: any) => ({
+            vehicles: quote.vehicles?.map((vehicle: QuoteData['vehicles'][0]) => ({
               vehicle_id: vehicle.vehicle_id,
               annual_km: vehicle.annual_km,
               business_km: vehicle.business_km,

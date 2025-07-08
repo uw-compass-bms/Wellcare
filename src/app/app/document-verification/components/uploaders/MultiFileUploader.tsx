@@ -7,12 +7,10 @@ import { DocumentState, CachedFileWithId } from '../../types';
 
 interface MultiFileUploaderProps {
   documentState: DocumentState;
-  onFileUpload: (file: File) => Promise<void>;
   onMultiFileUpload: (files: File[]) => Promise<void>;
   onFileDelete: (fileId: string) => void;
   onFileReprocess?: (fileId: string) => Promise<void>;
   title: string;
-  description: string;
   icon: LucideIcon;
   inputId: string;
   acceptedFormats?: string;
@@ -20,12 +18,10 @@ interface MultiFileUploaderProps {
 
 export default function MultiFileUploader({ 
   documentState, 
-  onFileUpload,
   onMultiFileUpload,
   onFileDelete,
   onFileReprocess,
   title,
-  description,
   icon: Icon,
   inputId,
   acceptedFormats = ".pdf,.png,.jpg,.jpeg,.webp"

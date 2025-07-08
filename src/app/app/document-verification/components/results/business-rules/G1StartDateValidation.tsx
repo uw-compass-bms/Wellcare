@@ -10,8 +10,8 @@ function isMvrMultiData(data: MvrData | MvrMultiData): data is MvrMultiData {
 }
 
 // 判断是否为多驾驶员G1结果
-function isMultiDriverG1Result(result: any): result is MultiDriverG1Result {
-  return result && 'drivers' in result && Array.isArray(result.drivers) && 'summary' in result;
+function isMultiDriverG1Result(result: unknown): result is MultiDriverG1Result {
+  return result !== null && typeof result === 'object' && 'drivers' in result && Array.isArray((result as { drivers: unknown }).drivers) && 'summary' in result;
 }
 
 export default function G1StartDateValidation({ documents, onResultChange }: BusinessRuleProps) {
@@ -96,7 +96,30 @@ export default function G1StartDateValidation({ documents, onResultChange }: Bus
         }
 
         // 构建请求数据
-        const requestData: any = {};
+        const requestData: {
+          mvr?: {
+            name?: string | null;
+            licence_number?: string | null;
+            date_of_birth?: string | null;
+            expiry_date?: string | null;
+            issue_date?: string | null;
+            records?: Array<{
+              name: string | null;
+              licence_number: string | null;
+              date_of_birth: string | null;
+              expiry_date: string | null;
+              issue_date: string | null;
+            }>;
+          };
+          quote?: {
+            date_g1?: string | null;
+            drivers?: Array<{
+              name: string;
+              licence_number: string;
+              date_g1: string | null;
+            }>;
+          };
+        } = {};
 
         if (mvrRecords.length > 0) {
           if (mvrRecords.length === 1) {

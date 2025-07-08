@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { DocumentType, DocumentState, CachedFileWithId } from '../types';
+import { DocumentType, DocumentState } from '../types';
 import { DocumentService } from '../services/documentService';
 
 export function useDocumentProcessing() {

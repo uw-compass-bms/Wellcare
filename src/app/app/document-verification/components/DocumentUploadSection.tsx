@@ -25,14 +25,12 @@ export default function DocumentUploadSection({
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
       <MvrUploader 
         documentState={documents.mvr}
-        onFileUpload={(file: File) => onFileUpload(file, 'mvr')}
         onMultiFileUpload={(files: File[]) => onMultiFileUpload ? onMultiFileUpload(files, 'mvr') : Promise.resolve()}
         onFileDelete={(fileId: string) => onFileDelete && onFileDelete(fileId, 'mvr')}
         onFileReprocess={(fileId: string) => onFileReprocess ? onFileReprocess(fileId, 'mvr') : Promise.resolve()}
       />
       <AutoPlusUploader 
         documentState={documents.autoplus}
-        onFileUpload={(file: File) => onFileUpload(file, 'autoplus')}
         onMultiFileUpload={(files: File[]) => onMultiFileUpload ? onMultiFileUpload(files, 'autoplus') : Promise.resolve()}
         onFileDelete={(fileId: string) => onFileDelete && onFileDelete(fileId, 'autoplus')}
         onFileReprocess={(fileId: string) => onFileReprocess ? onFileReprocess(fileId, 'autoplus') : Promise.resolve()}

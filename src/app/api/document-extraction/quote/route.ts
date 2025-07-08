@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
+import { QuoteData } from "../../../app/document-verification/types";
 
 /**
  * Quote提取提示词 - 基于实际文档格式
@@ -326,7 +327,7 @@ async function extractDataWithAI(b64data: string) {
 }
 
 // JSON解析和数据处理函数
-function parseAIResponse(data: string): any {
+function parseAIResponse(data: string): QuoteData {
   console.log("Parsing AI response:", data);
   
   try {
@@ -374,9 +375,9 @@ function parseAIResponse(data: string): any {
       
       // 空数组 - 现在数据存储在各个驾驶员下
       customer_contact_info: null,
-      claims: [] as any[],
-      convictions: [] as any[],
-      lapses: [] as any[]
+      claims: [],
+      convictions: [],
+      lapses: []
     };
 
     // 填充向后兼容字段
@@ -410,7 +411,7 @@ function parseAIResponse(data: string): any {
     }
 
     // 确保每个车辆都有必要的数据结构
-    processedData.vehicles.forEach((vehicle: any, vehicleIndex: number) => {
+    processedData.vehicles.forEach((vehicle: QuoteData['vehicles'][0], vehicleIndex: number) => {
       if (!vehicle.vehicle_id) {
         vehicle.vehicle_id = String(vehicleIndex + 1);
       }
@@ -420,7 +421,7 @@ function parseAIResponse(data: string): any {
       }
       
       // 确保每个驾驶员都有必要的数组
-      vehicle.drivers.forEach((driver: any, driverIndex: number) => {
+      vehicle.drivers.forEach((driver: QuoteData['vehicles'][0]['drivers'][0], driverIndex: number) => {
         if (!driver.claims || !Array.isArray(driver.claims)) {
           driver.claims = [];
         }
@@ -504,7 +505,7 @@ export async function POST(request: NextRequest) {
         detected_type: detectedType,
         model_used: "google/gemini-2.5-flash-preview",
         vehicles_count: result.vehicles?.length || 0,
-        total_drivers: result.vehicles?.reduce((total: number, vehicle: any) => 
+        total_drivers: result.vehicles?.reduce((total: number, vehicle: QuoteData['vehicles'][0]) => 
           total + (vehicle.drivers?.length || 0), 0) || 0
       }
     });
@@ -552,7 +553,7 @@ export async function PUT(request: NextRequest) {
 
     console.log(`开始处理Quote多文件提取请求... 共${files.length}个文件`);
 
-    const results: any[] = [];
+    const results: (QuoteData & { file_name: string; file_id: string })[] = [];
     const processingErrors: string[] = [];
 
     for (let i = 0; i < files.length; i++) {

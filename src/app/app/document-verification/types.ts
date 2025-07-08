@@ -431,7 +431,7 @@ export interface CachedFileWithId extends CachedFile {
   // 文件处理状态
   isProcessed?: boolean; // 是否已经处理过
   lastModified?: number; // 文件最后修改时间，用于检测变化
-  extractedData?: any; // 提取的数据
+  extractedData?: DocumentData; // 提取的数据
   error?: string; // 处理错误信息
 }
 
