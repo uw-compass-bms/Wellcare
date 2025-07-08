@@ -87,7 +87,19 @@ function getAutoPlusPrompt(): string {
 3. **Combine and Structure:** Combine the information from all pages into a single, structured JSON object.
 
 **Fields to Extract:**
-- **name**: The full name of the driver. Extract in "LASTNAME, FIRSTNAME" format (e.g., "SMITH, JANE").
+- **name**: The full name of the driver. **CRITICAL NAME EXTRACTION - READ CAREFULLY**:
+  * **Source Format**: Auto+ documents display names in "FIRSTNAME LASTNAME" format (e.g., "Lianli Li", "Jintao Wu")
+  * **Format Rules**: 
+    - Text BEFORE the space = FIRST NAME (given name)
+    - Text AFTER the space = LAST NAME (surname/family name)
+    - Example: "Lianli Li" means Lianli is the first name, Li is the last name
+  * **Output Format**: You MUST convert to "LASTNAME,FIRSTNAME" format in ALL CAPS
+  * **Conversion Examples**: 
+    - If you see "Lianli Li" → output "LI,LIANLI"
+    - If you see "Jintao Wu" → output "WU,JINTAO"  
+    - If you see "John Smith" → output "SMITH,JOHN"
+  * **CRITICAL**: Always reverse the order from the source document. Put LASTNAME first, then comma, then FIRSTNAME.
+  * **CRITICAL**: The output format must be "LASTNAME,FIRSTNAME" (no space after comma).
 - **licence_number**: The Driver's Licence Number. Must be exactly 1 letter followed by 14 digits with NO spaces, hyphens, or other separators (e.g., "A12345678901234"). If you see a licence number with hyphens like "W0418-74109-50504", remove all hyphens and format it as "W04187410950504". Extract only the licence number without any additional text or formatting like "Ontario".
 - **date_of_birth**: The driver's date of birth, in YYYY-MM-DD format.
 - **address**: The driver's full address. Use \\n for newlines.
@@ -105,7 +117,7 @@ function getAutoPlusPrompt(): string {
 
 **Example of desired JSON output:**
 {
-  "name": "SMITH, JANE",
+  "name": "SMITH,JANE",
   "licence_number": "S55554444433333",
   "date_of_birth": "1992-08-15",
   "address": "456 Oak Ave\\nSOMEWHERE, ON\\nX9Y 8Z7",
