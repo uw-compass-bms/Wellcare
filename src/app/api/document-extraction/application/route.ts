@@ -136,22 +136,22 @@ function getApplicationPrompt(): string {
 
 **JSON输出格式示例：**
 {
-  "name": "PANG, XIAOCHUAN",
-  "licence_number": "J40017900955826",
-  "date_of_birth": "1995-08-26",
-  "address": "205-12 GANDHI LANE\\nTHORNHILL, ON\\nL3T 0G8",
-  "phone": "647-870-8267",
+  "name": "LASTNAME, FIRSTNAME",
+  "licence_number": "L00000000000000",
+  "date_of_birth": "1995-01-01",
+  "address": "123 EXAMPLE ST\\nEXAMPLE CITY, ON\\nL0T 0G0",
+  "phone": "416-000-0000",
   "lessor_info": null,
-  "effective_date": "2025-03-20",
-  "expiry_date": "2026-03-20",
+  "effective_date": "2024-01-01",
+  "expiry_date": "2025-01-01",
   "vehicles": [
     {
       "vehicle_id": "Auto 1",
-      "vehicle_year": "2025",
-      "vehicle_make": "MERCEDES-BENZ",
-      "vehicle_model": "GLE450 4DR AWD",
-      "vin": "4JGFB8FB5KA123456",
-      "lienholder_info": "Mercedes-Benz Financial Servic 2580 Matheson Blvd East Suite 500 Mississauga ON L4W 0A5",
+      "vehicle_year": "2024",
+      "vehicle_make": "EXAMPLE MAKE",
+      "vehicle_model": "EXAMPLE MODEL 4DR AWD",
+      "vin": "1XXXXXXXBXXXXXXXX",
+      "lienholder_info": "Example Financial Services 123 Example Blvd Suite 100 Example City ON L0T 0G0",
       "vehicle_ownership": "lease",
       "annual_mileage": "10000",
       "commute_distance": "5",
@@ -211,9 +211,9 @@ function getApplicationPrompt(): string {
     {
       "vehicle_id": "Auto 2",
       "vehicle_year": "2019",
-      "vehicle_make": "HONDA",
-      "vehicle_model": "CIVIC EX 4DR",
-      "vin": "19XFC2F75KE987654",
+      "vehicle_make": "EXAMPLE MAKE 2",
+      "vehicle_model": "EXAMPLE MODEL 4DR",
+      "vin": "2XXXXXXXCXXXXXXXX",
       "lienholder_info": null,
       "vehicle_ownership": "owned",
       "annual_mileage": "10000",
@@ -268,23 +268,23 @@ function getApplicationPrompt(): string {
   ],
   "drivers": [
     {
-      "name": "Youyue Ji",
-      "licence_number": "J40017900955826",
-      "date_of_birth": "1995-08-26",
+      "name": "Driver One",
+      "licence_number": "L00000000000000",
+      "date_of_birth": "1995-01-01",
       "gender": "F",
       "marital_status": "M",
-      "first_licensed_date": "2017-10-01"
+      "first_licensed_date": "2017-01-01"
     },
     {
-      "name": "Xiaochuan Pang",
-      "licence_number": "P04187890440206",
-      "date_of_birth": "1994-02-06",
+      "name": "Driver Two",
+      "licence_number": "L00000000000001",
+      "date_of_birth": "1994-01-01",
       "gender": "M",
       "marital_status": "M",
       "first_licensed_date": "2016-01-01"
     }
   ],
-  "remarks": "Applicant Email - youyueyue@gmail.com\\nDrv. No. 1 - Graduated Licensing - G - 2017/10/16\\nDrv. No. 1 - Graduated Licensing - G1 - 2017/10/16\\nDrv. No. 1 - Graduated Licensing - G2 - 2018/10/16\\nDrv. No. 2 - Graduated Licensing - G - 2016/01/04\\nDrv. No. 2 - Graduated Licensing - G1 - 2016/01/04\\nDrv. No. 2 - Graduated Licensing - G2 - 2017/01/04\\nGeneral - OPCF 43 declined (Waiver of Depreciation). No compensation for depreciation in case of total loss.\\nOPCF 20 declined (Loss of Use). No coverage for rental car expenses if vehicle is unavailable due to accident.",
+  "remarks": "Applicant Email - example@email.com\\nDrv. No. 1 - Graduated Licensing - G - 2017/01/16\\nDrv. No. 1 - Graduated Licensing - G1 - 2017/01/16\\nDrv. No. 1 - Graduated Licensing - G2 - 2018/01/16\\nDrv. No. 2 - Graduated Licensing - G - 2016/01/04\\nDrv. No. 2 - Graduated Licensing - G1 - 2016/01/04\\nDrv. No. 2 - Graduated Licensing - G2 - 2017/01/04\\nGeneral - OPCF 43 declined (Waiver of Depreciation). No compensation for depreciation in case of total loss.\\nOPCF 20 declined (Loss of Use). No coverage for rental car expenses if vehicle is unavailable due to accident.",
   "payment_info": {
     "annual_premium": "8721.00",
     "monthly_payment": null,

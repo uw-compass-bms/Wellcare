@@ -3,18 +3,14 @@ export type RuleStatus = 'passed' | 'failed' | 'requires_review' | 'insufficient
 
 // 业务规则验证结果接口
 // 年度里程验证结果
-// 单车辆年里程核对结果
+// 单车辆年里程验证结果
 export interface SingleVehicleAnnualMileageResult {
   vehicle_id?: string;
   vehicle_info?: string; // 车辆信息描述
   
-  // Application数据
-  application_annual_mileage?: string;
-  application_commute_distance?: string;
-  
   // Quote数据
-  quote_annual_km?: string;
-  quote_commute_distance?: string;
+  annual_km?: string;
+  commute_distance?: string;
   
   // 验证结果
   status?: 'passed' | 'failed' | 'requires_review';
@@ -41,12 +37,33 @@ export interface AnnualMileageResult {
   overall_classification?: string;
 }
 
+// 单驾驶员新司机验证结果
+export interface SingleDriverNewDriverResult {
+  driver_name?: string;
+  licence_number?: string;
+  
+  // Quote数据
+  insurance_date?: string;
+  
+  // 验证结果
+  is_new_driver?: boolean;
+  years_of_history?: number;
+  status?: 'passed' | 'failed' | 'requires_review';
+}
+
 // 新司机验证结果
 export interface NewDriverResult {
+  // 向后兼容的单驾驶员字段
   first_insurance_date?: string | null;
   years_of_history?: string | number;
   is_new_driver?: boolean;
   reason?: string;
+  
+  // 多驾驶员支持
+  drivers?: SingleDriverNewDriverResult[];
+  total_drivers?: number;
+  new_drivers_count?: number;
+  experienced_drivers_count?: number;
 }
 
 // 单个驾驶员的G1验证结果

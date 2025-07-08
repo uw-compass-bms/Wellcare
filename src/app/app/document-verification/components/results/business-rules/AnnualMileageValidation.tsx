@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import { BusinessRuleProps, BusinessRuleResult, RULE_STATUS_CONFIG, AnnualMileageResult, SingleVehicleAnnualMileageResult } from './types';
-import { ApplicationData, QuoteData } from '../../../types';
+import { QuoteData } from '../../../types';
 
 export default function AnnualMileageValidation({ documents, onResultChange }: BusinessRuleProps) {
   const [result, setResult] = useState<BusinessRuleResult | null>(null);
@@ -20,37 +20,28 @@ export default function AnnualMileageValidation({ documents, onResultChange }: B
       
       try {
         // 准备API请求数据
-        const application = documents.application as unknown as ApplicationData | undefined;
         const quote = documents.quote as unknown as QuoteData | undefined;
 
+        // 构建符合后端期望的数据结构
         const requestData = {
-          application: application ? {
-            annual_mileage: application.annual_mileage,
-            commute_distance: application.commute_distance,
-            vehicles: application.vehicles?.map(vehicle => ({
-              vehicle_id: vehicle.vehicle_id,
-              annual_mileage: vehicle.annual_mileage,
-              commute_distance: vehicle.commute_distance,
-              vehicle_year: vehicle.vehicle_year,
-              vehicle_make: vehicle.vehicle_make,
-              vehicle_model: vehicle.vehicle_model
-            }))
-          } : undefined,
           quote: quote ? {
+            // 向后兼容字段
             annual_mileage: quote.annual_mileage,
             commute_distance: quote.commute_distance,
-            vehicles: quote.vehicles?.map(vehicle => ({
+            // 多车辆数据
+            vehicles: quote.vehicles?.map((vehicle: any) => ({
               vehicle_id: vehicle.vehicle_id,
               annual_km: vehicle.annual_km,
               business_km: vehicle.business_km,
               daily_km: vehicle.daily_km,
-              commute_distance: vehicle.daily_km, // Quote中可能没有专门的通勤距离字段
               vehicle_year: vehicle.vehicle_year,
               vehicle_make: vehicle.vehicle_make,
               vehicle_model: vehicle.vehicle_model
-            }))
+            })) || []
           } : undefined
         };
+
+        console.log('Annual mileage validation request:', requestData);
 
         // 调用后端API
         const response = await fetch('/api/business-rules/annual-mileage', {
@@ -62,6 +53,8 @@ export default function AnnualMileageValidation({ documents, onResultChange }: B
         });
 
         if (!response.ok) {
+          const errorText = await response.text();
+          console.error('API response error:', errorText);
           throw new Error(`API request failed: ${response.status}`);
         }
 
@@ -91,7 +84,7 @@ export default function AnnualMileageValidation({ documents, onResultChange }: B
     };
 
     validateRule();
-  }, [documents]); // 移除onResultChange依赖，使用ref避免无限循环
+  }, [documents]);
 
   // 显示加载状态
   if (loading) {
@@ -129,45 +122,31 @@ export default function AnnualMileageValidation({ documents, onResultChange }: B
           <strong>Details:</strong> {result.details}
         </div>
         
-                {/* 多车辆结果显示 */}
+                        {/* 多车辆结果显示 */}
         {result.result && (result.result as AnnualMileageResult).vehicles && (result.result as AnnualMileageResult).vehicles!.length > 0 ? (
           <div className="mt-3 space-y-3">
             {(result.result as AnnualMileageResult).vehicles!.map((vehicle: SingleVehicleAnnualMileageResult, index: number) => (
               <div key={index} className="text-sm">
                 <div className="font-medium mb-2">{vehicle.vehicle_info || `Vehicle ${index + 1}`}</div>
                 
-                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-                   {vehicle.application_annual_mileage && (
-                     <div>
-                       <div className="font-medium text-blue-800 mb-1">Application</div>
-                       <div><strong>Annual:</strong> {vehicle.application_annual_mileage}</div>
-                       {vehicle.application_commute_distance && (
-                         <div><strong>Commute:</strong> {vehicle.application_commute_distance}</div>
-                       )}
-                     </div>
-                   )}
-                   {vehicle.quote_annual_km && (
-                     <div>
-                       <div className="font-medium text-purple-800 mb-1">Quote</div>
-                       <div><strong>Annual:</strong> {vehicle.quote_annual_km}</div>
-                       {vehicle.quote_commute_distance && (
-                         <div><strong>Commute:</strong> {vehicle.quote_commute_distance}</div>
-                       )}
-                     </div>
-                   )}
-                 </div>
+                <div className="text-xs">
+                  {vehicle.annual_km && (
+                    <div><strong>Annual Mileage:</strong> {vehicle.annual_km}</div>
+                  )}
+                  {vehicle.commute_distance && (
+                    <div><strong>Commute Distance:</strong> {vehicle.commute_distance}</div>
+                  )}
+                </div>
               </div>
             ))}
           </div>
         ) : (
           /* 单车辆结果显示（向后兼容） */
           result.result && (
-            <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
-              <div><strong>Annual:</strong> {typeof (result.result as AnnualMileageResult).parsed_distance === 'number' 
-                ? `${((result.result as AnnualMileageResult).parsed_distance as number).toLocaleString()} km` 
-                : (result.result as AnnualMileageResult).parsed_distance}</div>
+            <div className="mt-3 text-xs">
+              <div><strong>Annual Mileage:</strong> {(result.result as AnnualMileageResult).parsed_distance}</div>
               {(result.result as AnnualMileageResult).parsed_commute !== null && (
-                <div><strong>Commute:</strong> {(result.result as AnnualMileageResult).parsed_commute} km</div>
+                <div><strong>Commute Distance:</strong> {(result.result as AnnualMileageResult).parsed_commute} km</div>
               )}
             </div>
           )

@@ -15,11 +15,6 @@ interface VehicleData {
 }
 
 interface AnnualMileageValidationRequest {
-  application?: {
-    annual_mileage?: string;
-    commute_distance?: string;
-    vehicles?: VehicleData[];
-  };
   quote?: {
     annual_mileage?: string;
     commute_distance?: string;
@@ -27,18 +22,14 @@ interface AnnualMileageValidationRequest {
   };
 }
 
-// 单车辆年里程核对结果
+// 单车辆年里程验证结果
 interface SingleVehicleAnnualMileageResult {
   vehicle_id?: string;
   vehicle_info?: string;
   
-  // Application数据
-  application_annual_mileage?: string;
-  application_commute_distance?: string;
-  
   // Quote数据
-  quote_annual_km?: string;
-  quote_commute_distance?: string;
+  annual_km?: string;
+  commute_distance?: string;
   
   // 验证结果
   status?: 'passed' | 'failed' | 'requires_review';
@@ -75,69 +66,57 @@ interface BusinessRuleResult {
   data_sources?: string[];
 }
 
-// 匹配和核对车辆年里程数据
-function matchAndValidateVehicles(
-  applicationVehicles: VehicleData[],
+// 验证车辆年里程数据
+function validateVehicles(
   quoteVehicles: VehicleData[]
 ): SingleVehicleAnnualMileageResult[] {
   const results: SingleVehicleAnnualMileageResult[] = [];
-  const maxVehicles = Math.max(applicationVehicles.length, quoteVehicles.length);
 
-  for (let i = 0; i < maxVehicles; i++) {
-    const appVehicle = applicationVehicles[i];
+  for (let i = 0; i < quoteVehicles.length; i++) {
     const quoteVehicle = quoteVehicles[i];
     
     // 构建车辆信息描述
     const vehicleInfo = [
-      appVehicle?.vehicle_year || quoteVehicle?.vehicle_year,
-      appVehicle?.vehicle_make || quoteVehicle?.vehicle_make,
-      appVehicle?.vehicle_model || quoteVehicle?.vehicle_model
+      quoteVehicle?.vehicle_year,
+      quoteVehicle?.vehicle_make,
+      quoteVehicle?.vehicle_model
     ].filter(Boolean).join(' ') || 
-    appVehicle?.vehicle_id || 
     quoteVehicle?.vehicle_id || 
     `Vehicle ${i + 1}`;
 
     // 获取原始数据
-    const appAnnualMileage = appVehicle?.annual_mileage;
-    const appCommuteDistance = appVehicle?.commute_distance;
     const quoteAnnualKm = quoteVehicle?.annual_km;
     const quoteCommuteDistance = quoteVehicle?.daily_km;
 
     // 解析数字用于验证
-    const appAnnualParsed = appAnnualMileage ? parseFloat(appAnnualMileage.replace(/[^\d.]/g, '')) : null;
-    const appCommuteParsed = appCommuteDistance ? parseFloat(appCommuteDistance.replace(/[^\d.]/g, '')) : null;
-    const quoteAnnualParsed = quoteAnnualKm ? parseFloat(quoteAnnualKm.replace(/[^\d.]/g, '')) : null;
-    const quoteCommuteParsed = quoteCommuteDistance ? parseFloat(quoteCommuteDistance.replace(/[^\d.]/g, '')) : null;
+    const annualParsed = quoteAnnualKm ? parseFloat(quoteAnnualKm.replace(/[^\d.]/g, '')) : null;
+    const commuteParsed = quoteCommuteDistance ? parseFloat(quoteCommuteDistance.replace(/[^\d.]/g, '')) : null;
 
     // 简化验证逻辑 - 只检查低里程和低通勤
     let status: 'passed' | 'failed' | 'requires_review' = 'passed';
 
     // 检查是否有数据
-    if (!appAnnualParsed && !quoteAnnualParsed) {
+    if (!annualParsed) {
       status = 'failed';
     } else {
-      // 低里程检查 - 使用任何可用的数据
-      const finalAnnualDistance = appAnnualParsed || quoteAnnualParsed;
-      if (finalAnnualDistance && finalAnnualDistance <= 8000) {
+      // 低里程检查
+      if (annualParsed <= 8000) {
         status = 'requires_review';
       }
 
-      // 通勤距离检查 - 使用任何可用的数据
-      const finalCommuteDistance = appCommuteParsed || quoteCommuteParsed;
-      if (finalCommuteDistance !== null && finalCommuteDistance < 5) {
+      // 通勤距离检查
+      if (commuteParsed !== null && commuteParsed < 5) {
         status = 'requires_review';
       }
     }
 
     results.push({
-      vehicle_id: appVehicle?.vehicle_id || quoteVehicle?.vehicle_id,
+      vehicle_id: quoteVehicle?.vehicle_id,
       vehicle_info: vehicleInfo,
       
-      // 原始数据
-      application_annual_mileage: appAnnualMileage,
-      application_commute_distance: appCommuteDistance,
-      quote_annual_km: quoteAnnualKm,
-      quote_commute_distance: quoteCommuteDistance,
+      // Quote数据
+      annual_km: quoteAnnualKm,
+      commute_distance: quoteCommuteDistance,
       
       // 验证结果
       status
@@ -149,35 +128,56 @@ function matchAndValidateVehicles(
 
 export async function POST(request: NextRequest) {
   try {
-    const { application, quote }: AnnualMileageValidationRequest = await request.json();
+    const body = await request.json();
+    console.log('Annual mileage validation request received:', JSON.stringify(body, null, 2));
+    
+    const { quote }: AnnualMileageValidationRequest = body;
+
+    if (!quote) {
+      console.log('No quote data provided');
+      return NextResponse.json({
+        id: 'annual_mileage',
+        name: 'Annual Mileage & Commute Validation',
+        status: 'insufficient_data',
+        recommendation: 'Upload complete Quote document',
+        details: 'No Quote data was provided for validation',
+        data_sources: []
+      });
+    }
 
     // 检查多车辆数据
-    const applicationVehicles = application?.vehicles || [];
-    const quoteVehicles = quote?.vehicles || [];
-    const hasMultiVehicleData = applicationVehicles.length > 0 || quoteVehicles.length > 0;
+    const quoteVehicles = quote.vehicles || [];
+    const hasMultiVehicleData = quoteVehicles.length > 0;
+    
+    console.log(`Processing ${hasMultiVehicleData ? 'multi-vehicle' : 'single-vehicle'} data`);
+    console.log(`Found ${quoteVehicles.length} vehicles`);
 
     let ruleResult: BusinessRuleResult;
 
     if (hasMultiVehicleData) {
-      // 多车辆验证逻辑 - 匹配和核对Application与Quote中的车辆
-      const allVehicleResults = matchAndValidateVehicles(applicationVehicles, quoteVehicles);
+      // 多车辆验证逻辑
+      const allVehicleResults = validateVehicles(quoteVehicles);
+      console.log('Vehicle validation results:', allVehicleResults);
 
       if (allVehicleResults.length === 0) {
+        console.log('No valid vehicle data found');
         return NextResponse.json({
           id: 'annual_mileage',
           name: 'Annual Mileage & Commute Validation',
           status: 'insufficient_data',
-          recommendation: 'Upload complete Application or Quote with vehicle annual driving distance information',
+          recommendation: 'Upload complete Quote with vehicle annual driving distance information',
           details: 'No vehicle data found with annual mileage information',
-          data_sources: ['Application', 'Quote']
+          data_sources: ['Quote']
         });
       }
 
       // 统计结果
       const totalVehicles = allVehicleResults.length;
-      const vehiclesRequiringReview = allVehicleResults.filter(v => v.status === 'requires_review').length;
-      const vehiclesPassed = allVehicleResults.filter(v => v.status === 'passed').length;
-      const vehiclesFailed = allVehicleResults.filter(v => v.status === 'failed').length;
+      const vehiclesRequiringReview = allVehicleResults.filter((v: SingleVehicleAnnualMileageResult) => v.status === 'requires_review').length;
+      const vehiclesPassed = allVehicleResults.filter((v: SingleVehicleAnnualMileageResult) => v.status === 'passed').length;
+      const vehiclesFailed = allVehicleResults.filter((v: SingleVehicleAnnualMileageResult) => v.status === 'failed').length;
+
+      console.log(`Results: ${vehiclesPassed} passed, ${vehiclesRequiringReview} require review, ${vehiclesFailed} failed`);
 
       // 确定整体状态
       let overallStatus: 'passed' | 'failed' | 'requires_review' = 'passed';
@@ -196,14 +196,12 @@ export async function POST(request: NextRequest) {
         status: overallStatus,
         result: {
           // 向后兼容字段 - 使用第一个车辆的数据
-          reported_distance: firstVehicle?.application_annual_mileage || firstVehicle?.quote_annual_km,
-          parsed_distance: firstVehicle?.application_annual_mileage || firstVehicle?.quote_annual_km,
+          reported_distance: firstVehicle?.annual_km,
+          parsed_distance: firstVehicle?.annual_km,
           threshold: 8000,
-          commute_distance: firstVehicle?.application_commute_distance || firstVehicle?.quote_commute_distance,
-          parsed_commute: firstVehicle?.application_commute_distance 
-            ? parseFloat(firstVehicle.application_commute_distance.replace(/[^\d.]/g, '')) || null
-            : firstVehicle?.quote_commute_distance 
-            ? parseFloat(firstVehicle.quote_commute_distance.replace(/[^\d.]/g, '')) || null
+          commute_distance: firstVehicle?.commute_distance,
+          parsed_commute: firstVehicle?.commute_distance 
+            ? parseFloat(firstVehicle.commute_distance.replace(/[^\d.]/g, '')) || null
             : null,
           commute_threshold: 5,
           classification: 'Simplified Review',
@@ -225,51 +223,45 @@ export async function POST(request: NextRequest) {
           'Review failed vehicles and contact customers for clarification.' :
           'Mark vehicles requiring review for supervisor approval.',
         details: `Validated ${totalVehicles} vehicle(s): ${vehiclesPassed} passed, ${vehiclesRequiringReview} require review, ${vehiclesFailed} failed.`,
-        data_sources: [
-          ...(applicationVehicles.length > 0 ? ['Application'] : []),
-          ...(quoteVehicles.length > 0 ? ['Quote'] : [])
-        ]
+        data_sources: ['Quote']
       };
     } else {
       // 单车辆验证逻辑（向后兼容）
-      const annualDistance = application?.annual_mileage || quote?.annual_mileage;
-      const commuteDistance = application?.commute_distance || quote?.commute_distance;
+      const annualDistance = quote.annual_mileage;
+      const commuteDistance = quote.commute_distance;
+      
+      console.log(`Single vehicle mode - annual_mileage: ${annualDistance}, commute_distance: ${commuteDistance}`);
 
       if (!annualDistance) {
+        console.log('No annual mileage data found');
         return NextResponse.json({
           id: 'annual_mileage',
           name: 'Annual Mileage & Commute Validation',
           status: 'insufficient_data',
-          recommendation: 'Upload complete Application or Quote with annual driving distance information',
-          details: 'Missing required data: Annual driving distance not found in Application or Quote',
-          data_sources: ['Application', 'Quote']
+          recommendation: 'Upload complete Quote with annual driving distance information',
+          details: 'Missing required data: Annual driving distance not found in Quote',
+          data_sources: ['Quote']
         });
       }
 
       // 创建单车辆数据进行验证
-      const singleAppVehicle: VehicleData = application ? {
-        annual_mileage: application.annual_mileage,
-        commute_distance: application.commute_distance
-      } : {};
+      const singleQuoteVehicle: VehicleData = {
+        annual_km: annualDistance,
+        daily_km: commuteDistance || undefined
+      };
 
-      const singleQuoteVehicle: VehicleData = quote ? {
-        annual_km: quote.annual_mileage, // 向后兼容映射
-        commute_distance: quote.commute_distance
-      } : {};
-
-      const validationResults = matchAndValidateVehicles(
-        application ? [singleAppVehicle] : [],
-        quote ? [singleQuoteVehicle] : []
-      );
+      const validationResults = validateVehicles([singleQuoteVehicle]);
+      console.log('Single vehicle validation result:', validationResults);
 
       if (validationResults.length === 0) {
+        console.log('Failed to validate single vehicle');
         return NextResponse.json({
           id: 'annual_mileage',
           name: 'Annual Mileage & Commute Validation',
           status: 'insufficient_data',
-          recommendation: 'Upload complete Application or Quote with annual driving distance information',
-          details: 'Missing required data: Annual driving distance not found in Application or Quote',
-          data_sources: ['Application', 'Quote']
+          recommendation: 'Upload complete Quote with annual driving distance information',
+          details: 'Missing required data: Annual driving distance not found in Quote',
+          data_sources: ['Quote']
         });
       }
 
@@ -281,14 +273,12 @@ export async function POST(request: NextRequest) {
         status: validationResult.status === 'requires_review' ? 'requires_review' : 
                 validationResult.status === 'failed' ? 'failed' : 'passed',
         result: {
-          reported_distance: validationResult.application_annual_mileage || validationResult.quote_annual_km,
-          parsed_distance: validationResult.application_annual_mileage || validationResult.quote_annual_km,
+          reported_distance: validationResult.annual_km,
+          parsed_distance: validationResult.annual_km,
           threshold: 8000,
-          commute_distance: validationResult.application_commute_distance || validationResult.quote_commute_distance,
-          parsed_commute: validationResult.application_commute_distance 
-            ? parseFloat(validationResult.application_commute_distance.replace(/[^\d.]/g, '')) || null
-            : validationResult.quote_commute_distance 
-            ? parseFloat(validationResult.quote_commute_distance.replace(/[^\d.]/g, '')) || null
+          commute_distance: validationResult.commute_distance,
+          parsed_commute: validationResult.commute_distance 
+            ? parseFloat(validationResult.commute_distance.replace(/[^\d.]/g, '')) || null
             : null,
           commute_threshold: 5,
           classification: 'Simplified Review',
@@ -300,21 +290,28 @@ export async function POST(request: NextRequest) {
           'Contact customer to clarify annual driving distance format.' :
           'Mark for supervisor review and verify customer driving patterns.',
         details: 'Single vehicle validation completed.',
-        data_sources: [application?.annual_mileage ? 'Application' : 'Quote']
+        data_sources: ['Quote']
       };
     }
 
+    console.log('Final validation result:', ruleResult);
     return NextResponse.json(ruleResult);
 
   } catch (error) {
     console.error('Annual mileage validation error:', error);
+    
+    // 提供更详细的错误信息
+    let errorMessage = 'An unexpected error occurred while processing the annual mileage validation';
+    if (error instanceof Error) {
+      errorMessage += `: ${error.message}`;
+    }
     
     const errorResult: BusinessRuleResult = {
       id: 'annual_mileage',
       name: 'Annual Mileage & Commute Validation',
       status: 'failed',
       recommendation: 'System error occurred during validation',
-      details: 'An unexpected error occurred while processing the annual mileage validation. Please try again.',
+      details: errorMessage,
       data_sources: []
     };
     

@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useEffect, useState, useRef } from 'react';
-import { BusinessRuleProps, BusinessRuleResult, RULE_STATUS_CONFIG, NewDriverResult } from './types';
-import { QuoteData, AutoPlusData } from '../../../types';
+import { BusinessRuleProps, BusinessRuleResult, RULE_STATUS_CONFIG, NewDriverResult, SingleDriverNewDriverResult } from './types';
+import { QuoteData } from '../../../types';
 
 export default function NewDriverValidation({ documents, onResultChange }: BusinessRuleProps) {
   const [result, setResult] = useState<BusinessRuleResult | null>(null);
@@ -20,18 +20,49 @@ export default function NewDriverValidation({ documents, onResultChange }: Busin
       
       try {
         // 准备API请求数据
-        const autoplus = documents.autoplus as unknown as AutoPlusData | undefined;
         const quote = documents.quote as unknown as QuoteData | undefined;
 
+        // 从QuoteData的vehicles中提取所有drivers
+        const quoteDrivers: Array<{
+          name: string;
+          licence_number: string | null;
+          date_insured: string | null;
+          date_with_company: string | null;
+        }> = [];
+        
+        if (quote?.vehicles) {
+          quote.vehicles.forEach(vehicle => {
+            if (vehicle.drivers) {
+              vehicle.drivers.forEach(driver => {
+                // 避免重复添加同一个驾驶员
+                const existingDriver = quoteDrivers.find(qd => 
+                  qd.name === driver.name && qd.licence_number === driver.licence_number
+                );
+                
+                if (!existingDriver && driver.name) {
+                  quoteDrivers.push({
+                    name: driver.name,
+                    licence_number: driver.licence_number,
+                    date_insured: driver.date_insured,
+                    date_with_company: driver.date_with_company
+                  });
+                }
+              });
+            }
+          });
+        }
+
         const requestData = {
-          autoplus: autoplus ? {
-            first_insurance_date: autoplus.first_insurance_date
-          } : undefined,
           quote: quote ? {
+            // 向后兼容字段
             date_insured: quote.date_insured,
-            date_with_company: quote.date_with_company
+            date_with_company: quote.date_with_company,
+            // 多驾驶员数据
+            drivers: quoteDrivers
           } : undefined
         };
+
+        console.log('New driver validation request:', requestData);
 
         // 调用后端API
         const response = await fetch('/api/business-rules/new-driver', {
@@ -43,6 +74,8 @@ export default function NewDriverValidation({ documents, onResultChange }: Busin
         });
 
         if (!response.ok) {
+          const errorText = await response.text();
+          console.error('API response error:', errorText);
           throw new Error(`API request failed: ${response.status}`);
         }
 
@@ -107,19 +140,41 @@ export default function NewDriverValidation({ documents, onResultChange }: Busin
         <div>
           <strong>Details:</strong> {result.details}
         </div>
-        {result.result && (
-          <div className="mt-3 p-3 bg-white rounded border">
-            <strong>Analysis:</strong>
-            <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
-              <div><strong>First Insurance Date:</strong> {(result.result as NewDriverResult).first_insurance_date || 'Not found'}</div>
-              <div><strong>Years of History:</strong> {(result.result as NewDriverResult).years_of_history}</div>
-              <div><strong>New Driver:</strong> {(result.result as NewDriverResult).is_new_driver ? 'Yes' : 'No'}</div>
-              {(result.result as NewDriverResult).reason && (
-                <div className="md:col-span-2"><strong>Reason:</strong> {(result.result as NewDriverResult).reason}</div>
-              )}
-            </div>
+        
+        {/* 多驾驶员结果显示 */}
+        {result.result && (result.result as NewDriverResult).drivers && (result.result as NewDriverResult).drivers!.length > 0 ? (
+          <div className="mt-3 space-y-3">
+            {(result.result as NewDriverResult).drivers!.map((driver: SingleDriverNewDriverResult, index: number) => (
+              <div key={index} className="text-sm">
+                <div className="font-medium mb-2">{driver.driver_name || `Driver ${index + 1}`}</div>
+                
+                <div className="text-xs">
+                  {driver.insurance_date ? (
+                    <div><strong>Insurance Date:</strong> {driver.insurance_date}</div>
+                  ) : (
+                    <div><strong>Insurance Date:</strong> Not found</div>
+                  )}
+                  
+                  {driver.years_of_history !== undefined && (
+                    <div className="mt-1">
+                      <strong>History:</strong> {driver.years_of_history.toFixed(1)} years
+                      {driver.is_new_driver && <span className="text-orange-600 ml-2">• New Driver</span>}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
           </div>
+        ) : (
+          /* 单驾驶员结果显示（向后兼容） */
+          result.result && (result.result as NewDriverResult).years_of_history !== undefined && (
+            <div className="mt-3 text-xs">
+              <strong>History:</strong> {(result.result as NewDriverResult).years_of_history} years
+              {(result.result as NewDriverResult).is_new_driver && <span className="text-orange-600 ml-2">• New Driver</span>}
+            </div>
+          )
         )}
+
         <div className="text-xs opacity-75">
           <strong>Data Sources:</strong> {result.data_sources?.join(', ')}
         </div>
