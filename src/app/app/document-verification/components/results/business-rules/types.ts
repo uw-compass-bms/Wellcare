@@ -3,7 +3,26 @@ export type RuleStatus = 'passed' | 'failed' | 'requires_review' | 'insufficient
 
 // 业务规则验证结果接口
 // 年度里程验证结果
+// 单车辆年里程核对结果
+export interface SingleVehicleAnnualMileageResult {
+  vehicle_id?: string;
+  vehicle_info?: string; // 车辆信息描述
+  
+  // Application数据
+  application_annual_mileage?: string;
+  application_commute_distance?: string;
+  
+  // Quote数据
+  quote_annual_km?: string;
+  quote_commute_distance?: string;
+  
+  // 验证结果
+  status?: 'passed' | 'failed' | 'requires_review';
+}
+
+// 多车辆年里程验证汇总结果
 export interface AnnualMileageResult {
+  // 向后兼容的单车辆字段
   reported_distance?: string;
   parsed_distance?: number | string;
   threshold?: number;
@@ -12,6 +31,14 @@ export interface AnnualMileageResult {
   commute_threshold?: number;
   classification?: string;
   issues?: string[];
+  
+  // 多车辆支持
+  vehicles?: SingleVehicleAnnualMileageResult[];
+  total_vehicles?: number;
+  vehicles_requiring_review?: number;
+  vehicles_passed?: number;
+  vehicles_failed?: number;
+  overall_classification?: string;
 }
 
 // 新司机验证结果

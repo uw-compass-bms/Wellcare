@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useRef } from 'react';
-import { BusinessRuleProps, BusinessRuleResult, RULE_STATUS_CONFIG, AnnualMileageResult } from './types';
+import { BusinessRuleProps, BusinessRuleResult, RULE_STATUS_CONFIG, AnnualMileageResult, SingleVehicleAnnualMileageResult } from './types';
 import { ApplicationData, QuoteData } from '../../../types';
 
 export default function AnnualMileageValidation({ documents, onResultChange }: BusinessRuleProps) {
@@ -26,11 +26,29 @@ export default function AnnualMileageValidation({ documents, onResultChange }: B
         const requestData = {
           application: application ? {
             annual_mileage: application.annual_mileage,
-            commute_distance: application.commute_distance
+            commute_distance: application.commute_distance,
+            vehicles: application.vehicles?.map(vehicle => ({
+              vehicle_id: vehicle.vehicle_id,
+              annual_mileage: vehicle.annual_mileage,
+              commute_distance: vehicle.commute_distance,
+              vehicle_year: vehicle.vehicle_year,
+              vehicle_make: vehicle.vehicle_make,
+              vehicle_model: vehicle.vehicle_model
+            }))
           } : undefined,
           quote: quote ? {
             annual_mileage: quote.annual_mileage,
-            commute_distance: quote.commute_distance
+            commute_distance: quote.commute_distance,
+            vehicles: quote.vehicles?.map(vehicle => ({
+              vehicle_id: vehicle.vehicle_id,
+              annual_km: vehicle.annual_km,
+              business_km: vehicle.business_km,
+              daily_km: vehicle.daily_km,
+              commute_distance: vehicle.daily_km, // Quote中可能没有专门的通勤距离字段
+              vehicle_year: vehicle.vehicle_year,
+              vehicle_make: vehicle.vehicle_make,
+              vehicle_model: vehicle.vehicle_model
+            }))
           } : undefined
         };
 
@@ -111,10 +129,40 @@ export default function AnnualMileageValidation({ documents, onResultChange }: B
           <strong>Details:</strong> {result.details}
         </div>
         
-        {result.result && (
-          <div className="mt-3 p-3 bg-white rounded border">
-            <strong>Analysis:</strong>
-            <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+                {/* 多车辆结果显示 */}
+        {result.result && (result.result as AnnualMileageResult).vehicles && (result.result as AnnualMileageResult).vehicles!.length > 0 ? (
+          <div className="mt-3 space-y-3">
+            {(result.result as AnnualMileageResult).vehicles!.map((vehicle: SingleVehicleAnnualMileageResult, index: number) => (
+              <div key={index} className="text-sm">
+                <div className="font-medium mb-2">{vehicle.vehicle_info || `Vehicle ${index + 1}`}</div>
+                
+                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                   {vehicle.application_annual_mileage && (
+                     <div>
+                       <div className="font-medium text-blue-800 mb-1">Application</div>
+                       <div><strong>Annual:</strong> {vehicle.application_annual_mileage}</div>
+                       {vehicle.application_commute_distance && (
+                         <div><strong>Commute:</strong> {vehicle.application_commute_distance}</div>
+                       )}
+                     </div>
+                   )}
+                   {vehicle.quote_annual_km && (
+                     <div>
+                       <div className="font-medium text-purple-800 mb-1">Quote</div>
+                       <div><strong>Annual:</strong> {vehicle.quote_annual_km}</div>
+                       {vehicle.quote_commute_distance && (
+                         <div><strong>Commute:</strong> {vehicle.quote_commute_distance}</div>
+                       )}
+                     </div>
+                   )}
+                 </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          /* 单车辆结果显示（向后兼容） */
+          result.result && (
+            <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
               <div><strong>Annual:</strong> {typeof (result.result as AnnualMileageResult).parsed_distance === 'number' 
                 ? `${((result.result as AnnualMileageResult).parsed_distance as number).toLocaleString()} km` 
                 : (result.result as AnnualMileageResult).parsed_distance}</div>
@@ -122,25 +170,7 @@ export default function AnnualMileageValidation({ documents, onResultChange }: B
                 <div><strong>Commute:</strong> {(result.result as AnnualMileageResult).parsed_commute} km</div>
               )}
             </div>
-            
-            {result.status === 'requires_review' && (
-              <div className="mt-3 p-2 bg-yellow-100 border border-yellow-300 rounded text-xs">
-                <strong>Required Actions:</strong>
-                <ul className="mt-1 ml-4 list-disc space-y-1">
-                  {Array.isArray((result.result as AnnualMileageResult).issues) && (result.result as AnnualMileageResult).issues?.map((issue: string, index: number) => (
-                    <li key={index} className="text-red-700 font-medium">{issue}</li>
-                  ))}
-                </ul>
-                <ul className="mt-2 ml-4 list-disc space-y-1">
-                  <li>Mark this application for supervisor review</li>
-                  <li>Verify customer driving patterns and usage</li>
-                  <li>Update system notes with review status</li>
-                  <li>Consider requesting additional documentation if needed</li>
-                  <li>Confirm annual mileage and commute distance accuracy</li>
-                </ul>
-              </div>
-            )}
-          </div>
+          )
         )}
 
         <div className="text-xs opacity-75">
