@@ -94,11 +94,20 @@ function encodeBase64ToData(base64data: string): {
 function getMvrPrompt(): string {
   return `You are an expert OCR and data extraction agent. Analyze the provided document (PDF or image) of an MVR (Motor Vehicle Record) from Ontario, Canada. Extract the following fields and return the data in a structured JSON format.
 
-**CRITICAL DATE FORMAT INSTRUCTIONS:**
-- MVR documents from Ontario use DD/MM/YYYY format (day/month/year)
-- You MUST convert ALL dates from DD/MM/YYYY to YYYY-MM-DD format
-- Examples: "15/06/2022" becomes "2022-06-15", "31/12/2023" becomes "2023-12-31"
-- Pay special attention to day/month order - do NOT confuse it with MM/DD/YYYY format
+**🚨 EXTREMELY CRITICAL DATE FORMAT INSTRUCTIONS - READ THIS FIRST! 🚨**
+- **FATAL ERROR WARNING**: MVR documents from Ontario use DD/MM/YYYY format (day/month/year) - NOT MM/DD/YYYY!
+- **MANDATORY CONVERSION**: You MUST convert ALL dates from DD/MM/YYYY to YYYY-MM-DD format
+- **NO EXCEPTIONS**: Every single date field MUST follow this conversion rule
+- **WRONG CONVERSION = SYSTEM FAILURE**: Incorrect date conversion will cause critical business rule failures
+
+**DATE CONVERSION EXAMPLES - MEMORIZE THESE:**
+- "04/02/2026" (4th February 2026) → "2026-02-04" ✅ CORRECT
+- "19/06/1998" (19th June 1998) → "1998-06-19" ✅ CORRECT  
+- "15/06/2022" (15th June 2022) → "2022-06-15" ✅ CORRECT
+- "31/12/2023" (31st December 2023) → "2023-12-31" ✅ CORRECT
+- "05/03/2022" (5th March 2022) → "2022-03-05" ✅ CORRECT
+
+**⚠️ CRITICAL WARNING**: Do NOT confuse with American MM/DD/YYYY format! Ontario MVR uses DD/MM/YYYY!
 
 
 **Important Instructions:**
@@ -123,24 +132,25 @@ function getMvrPrompt(): string {
   * **CRITICAL**: The comma separates last name (before comma) from first name (after comma)
 - **gender**: The gender of the driver (M/F).
 - **address**: The driver's full address. Look for the complete address including city and postal code.
-- **expiry_date**: The expiry date of the licence. Source format is DD/MM/YYYY, convert to YYYY-MM-DD format.
-- **date_of_birth**: The date of birth of the driver. Source format is DD/MM/YYYY, convert to YYYY-MM-DD format.
+- **expiry_date**: The expiry date of the licence. **🚨 CRITICAL**: Source format is DD/MM/YYYY, MUST convert to YYYY-MM-DD format. Example: "04/02/2026" → "2026-02-04"
+- **date_of_birth**: The date of birth of the driver. **🚨 CRITICAL**: Source format is DD/MM/YYYY, MUST convert to YYYY-MM-DD format. Example: "19/06/1998" → "1998-06-19"
 - **class**: The class of the licence (e.g., G, G2).
 - **status**: The current status of the licence. This is CRITICAL - extract exactly as shown: "LICENCED", "EXPIRED", "SUSPENDED", "UNLICENSED", etc. This field determines license validity.
-- **issue_date**: The original issue date of the licence. Source format is DD/MM/YYYY, convert to YYYY-MM-DD format.
+- **issue_date**: The original issue date of the licence. **🚨 CRITICAL**: Source format is DD/MM/YYYY, MUST convert to YYYY-MM-DD format. Example: "15/06/2022" → "2022-06-15"
 - **conditions**: An array of objects for items under "CONDITIONS AND ENDORSEMENTS". Each object should have:
-  - date: The date if available (source format DD/MM/YYYY, convert to YYYY-MM-DD format) or null
+  - date: **🚨 CRITICAL DATE CONVERSION**: If date available (source format DD/MM/YYYY, MUST convert to YYYY-MM-DD format) or null
   - description: The condition description
   **IGNORE the following text patterns:** "REQUIRES CORRECTIVE LENSES", "CORRECTIVE LENSES", "SEARCH SUCCESSFUL - NO PUBLIC RECORD" - these are not actual license conditions.
 - **convictions**: An array of objects for items under "CONVICTIONS, DISCHARGES AND OTHER ACTIONS". Each object should have:
-  - date: The conviction date (source format DD/MM/YYYY, convert to YYYY-MM-DD format) - USE THE DATE FROM THE "DATE" COLUMN OR THE DATE LISTED BELOW THE CONVICTION, NOT the date mentioned in the description text
+  - date: **🚨 CRITICAL DATE CONVERSION**: The conviction date (source format DD/MM/YYYY, MUST convert to YYYY-MM-DD format) - USE THE DATE FROM THE "DATE" COLUMN OR THE DATE LISTED BELOW THE CONVICTION, NOT the date mentioned in the description text
   - description: The conviction description (e.g., "SPEEDING", "DISOBEY LEGAL SIGN", etc.)
 
-**CRITICAL for Convictions:**
+**🚨 CRITICAL for Convictions - DATE CONVERSION MANDATORY:**
 - For conviction dates, use the date from the structured "DATE" column or the date listed below the conviction entry
-- Remember: conviction dates are in DD/MM/YYYY format, convert to YYYY-MM-DD
+- **FATAL ERROR WARNING**: conviction dates are in DD/MM/YYYY format, MUST convert to YYYY-MM-DD
 - Do NOT use dates that appear within the description text
 - Focus on the actual violation description (e.g., "SPEEDING", "DISOBEY LEGAL SIGN")
+- **Example**: If conviction date shows "15/06/2022" → convert to "2022-06-15"
 
 **Example of desired JSON output:**
 {
@@ -161,10 +171,14 @@ function getMvrPrompt(): string {
   ]
 }
 
-**Date Conversion Examples:**
-- If you see "15/06/2022" in the MVR document, convert it to "2022-06-15" (15th day of June)
-- If you see "31/12/2023" in the MVR document, convert it to "2023-12-31" (31st day of December)
-- If you see "05/03/2022" in the MVR document, convert it to "2022-03-05" (5th day of March）
+**🚨 FINAL REMINDER - DATE CONVERSION EXAMPLES (MANDATORY TO FOLLOW):**
+- MVR shows "04/02/2026" → Output "2026-02-04" (4th February 2026) ✅
+- MVR shows "19/06/1998" → Output "1998-06-19" (19th June 1998) ✅  
+- MVR shows "15/06/2022" → Output "2022-06-15" (15th June 2022) ✅
+- MVR shows "31/12/2023" → Output "2023-12-31" (31st December 2023) ✅
+- MVR shows "05/03/2022" → Output "2022-03-05" (5th March 2022) ✅
+
+**⚠️ WRONG DATE CONVERSION WILL CAUSE SYSTEM FAILURE - DOUBLE CHECK ALL DATES!**
 
 If no conditions or convictions are found, return empty arrays []. If a field is not found, return null for that field. Return only the JSON string, with no additional formatting or markdown.`;
 }
