@@ -2,7 +2,7 @@
 import { UserButton } from "@clerk/nextjs";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, FileText, Users, Settings } from 'lucide-react';
+import { FileText } from 'lucide-react';
 
 export default function AppLayout({
   children,
@@ -11,44 +11,26 @@ export default function AppLayout({
 }) {
   const pathname = usePathname();
 
-  // 导航菜单配置
+  // Navigation menu configuration - only document verification
   const navigation = [
     {
-      name: 'Dashboard',
-      href: '/app/dashboard',
-      icon: BarChart3,
-      current: pathname === '/app/dashboard'
-    },
-    {
-      name: 'Document Verification', 
+      name: 'Document Extraction',
       href: '/app/document-verification',
       icon: FileText,
       current: pathname === '/app/document-verification'
-    },
-    {
-      name: 'Client Management',
-      href: '/app/client-management', 
-      icon: Users,
-      current: pathname === '/app/client-management'
-    },
-    {
-      name: 'Tools',
-      href: '/app/tools',
-      icon: Settings, 
-      current: pathname === '/app/tools'
     }
   ];
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* 主应用导航栏 */}
+      {/* Main application navigation bar */}
       <nav className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
-            {/* 左侧品牌和导航 */}
+            {/* Left side brand and navigation */}
             <div className="flex">
               <div className="flex-shrink-0 flex items-center">
-                <Link href="/" className="text-2xl font-bold text-blue-600">
+                <Link href="/app/document-verification" className="text-2xl font-bold text-blue-600">
                   UW Compass
                 </Link>
               </div>
@@ -73,14 +55,14 @@ export default function AppLayout({
               </div>
             </div>
 
-            {/* 右侧用户菜单 */}
+            {/* Right side user menu */}
             <div className="flex items-center">
               <UserButton />
             </div>
           </div>
         </div>
 
-        {/* 移动端导航菜单 */}
+        {/* Mobile navigation menu */}
         <div className="sm:hidden">
           <div className="pt-2 pb-3 space-y-1">
             {navigation.map((item) => {
@@ -104,7 +86,7 @@ export default function AppLayout({
         </div>
       </nav>
 
-      {/* 主要内容区域 */}
+      {/* Main content area */}
       <main className="flex-1">
         {children}
       </main>
