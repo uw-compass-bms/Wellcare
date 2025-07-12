@@ -2,7 +2,7 @@
 import { UserButton } from "@clerk/nextjs";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { FileText } from 'lucide-react';
+import { FileText, Users } from 'lucide-react';
 
 export default function AppLayout({
   children,
@@ -11,13 +11,19 @@ export default function AppLayout({
 }) {
   const pathname = usePathname();
 
-  // Navigation menu configuration - only document verification
+  // Navigation menu configuration
   const navigation = [
     {
       name: 'Document Extraction',
       href: '/app/document-verification',
       icon: FileText,
       current: pathname === '/app/document-verification'
+    },
+    {
+      name: 'Client Management',
+      href: '/app/client-management',
+      icon: Users,
+      current: pathname === '/app/client-management'
     }
   ];
 
