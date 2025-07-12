@@ -414,8 +414,6 @@ export type DocumentType = 'mvr' | 'autoplus' | 'quote' | 'application';
 // 联合数据类型
 export type DocumentData = MvrData | MvrMultiData | AutoPlusData | AutoPlusMultiData | QuoteData | ApplicationData;
 
-// 已删除验证错误类型 - 不再需要
-
 // 文件缓存类型
 export interface CachedFile {
   file: File;
