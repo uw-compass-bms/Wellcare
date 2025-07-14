@@ -13,7 +13,6 @@ export default function DocumentVerification() {
     multiFiles,
     singleFiles,
     isProcessing,
-    processedResults,
     saveStatus,
     
     // 计算值

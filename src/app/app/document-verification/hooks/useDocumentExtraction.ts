@@ -3,15 +3,27 @@ import { useUser } from '@clerk/nextjs';
 import { UploadedFile } from '@/components/ui/multi-file-uploader';
 import { SingleFileData } from '@/components/ui/single-file-uploader';
 import { fileToBase64, calculateFileStats } from '../utils/fileUtils';
-import { saveMVRData, saveMVRDataBatch } from '@/lib/supabase/client';
-import { MvrData } from '../types';
+import { 
+  createCase, 
+  saveMVRDataBatchWithCase,
+  saveAutoPlusDataWithCase,
+  saveAutoPlusDataBatchWithCase,
+  saveQuoteDataWithCase,
+  saveApplicationDataWithCase,
+  updateCaseDocuments,
+  CaseRecord
+} from '@/lib/supabase/client';
+import { MvrData, AutoPlusData, QuoteData, ApplicationData, DocumentData } from '../types';
 
 // 提取数据接口（通用结构）
 interface ExtractedData {
   [key: string]: unknown;
 }
 
-export const useDocumentExtraction = () => {
+export const useDocumentExtraction = (
+  updateMode = false,
+  selectedCase: CaseRecord | null = null
+) => {
   const { user } = useUser();
   
   // 多文件状态
@@ -31,31 +43,83 @@ export const useDocumentExtraction = () => {
   const [processedResults, setProcessedResults] = useState<Record<string, ExtractedData | ExtractedData[]>>({});
   const [saveStatus, setSaveStatus] = useState<string | null>(null);
 
-  // Auto-save MVR data to database
-  const autoSaveMVRData = async (mvrRecords: MvrData[]) => {
+  // Auto-save document data to database (create new case or update existing case)
+  const autoSaveDocumentData = async (
+    documentType: 'mvr' | 'autoplus' | 'quote' | 'application',
+    extractedData: DocumentData | DocumentData[]
+  ) => {
     if (!user?.id) return;
     
     try {
-      setSaveStatus('Saving MVR data to database...');
-      
-      if (Array.isArray(mvrRecords)) {
-        await saveMVRDataBatch(user.id, mvrRecords);
+      if (updateMode && selectedCase) {
+        // 更新模式：覆盖现有Case中的文档
+        setSaveStatus(`🔄 Updating ${documentType.toUpperCase()} data in ${selectedCase.case_number}...`);
+        
+        await updateCaseDocuments(selectedCase.id, documentType, extractedData);
+        
+        setSaveStatus(`✅ Successfully updated ${documentType.toUpperCase()} in ${selectedCase.case_number}!`);
+        
+        // Auto-redirect to client management page
+        setTimeout(() => {
+          window.location.href = '/app/client-management';
+        }, 2000);
       } else {
-        await saveMVRData(user.id, mvrRecords as MvrData);
+        // 创建模式：创建新Case
+        setSaveStatus(`Creating case and saving ${documentType.toUpperCase()} data...`);
+        
+        // Extract primary contact information from first record
+        const dataArray = Array.isArray(extractedData) ? extractedData : [extractedData];
+        const firstRecord = dataArray[0];
+        const primaryContactName = firstRecord?.name || null;
+        const primaryLicenceNumber = firstRecord?.licence_number || null;
+        
+        // Create a new case
+        const newCase = await createCase(user.id, primaryContactName, primaryLicenceNumber);
+        
+        // Save data based on document type
+        switch (documentType) {
+          case 'mvr':
+            if (Array.isArray(extractedData)) {
+              await saveMVRDataBatchWithCase(user.id, newCase.id, extractedData as MvrData[]);
+            } else {
+              await saveMVRDataBatchWithCase(user.id, newCase.id, [extractedData as MvrData]);
+            }
+            break;
+            
+          case 'autoplus':
+            if (Array.isArray(extractedData)) {
+              await saveAutoPlusDataBatchWithCase(user.id, newCase.id, extractedData as AutoPlusData[]);
+            } else {
+              await saveAutoPlusDataWithCase(user.id, newCase.id, extractedData as AutoPlusData);
+            }
+            break;
+            
+          case 'quote':
+            await saveQuoteDataWithCase(user.id, newCase.id, extractedData as QuoteData);
+            break;
+            
+          case 'application':
+            await saveApplicationDataWithCase(user.id, newCase.id, extractedData as ApplicationData);
+            break;
+        }
+        
+        setSaveStatus(`✅ Case ${newCase.case_number} created successfully!`);
+        
+        // Auto-redirect to client management page
+        setTimeout(() => {
+          window.location.href = '/app/client-management';
+        }, 2000);
       }
-      
-      setSaveStatus('✅ MVR data saved successfully!');
-      
-      // Clear save status after 5 seconds (enough time for auto-redirect)
-      setTimeout(() => setSaveStatus(null), 5000);
     } catch (error) {
-      console.error('Failed to save MVR data:', error);
-      setSaveStatus('❌ Failed to save MVR data');
+      console.error(`Failed to ${updateMode ? 'update' : 'create'} ${documentType} data:`, error);
+      setSaveStatus(`❌ Failed to ${updateMode ? 'update' : 'create'} ${documentType} data`);
       
       // Clear error status after 5 seconds
       setTimeout(() => setSaveStatus(null), 5000);
     }
   };
+
+
 
   // 处理单个文件
   const processSingleFile = async (file: File, type: 'quote' | 'application') => {
@@ -92,6 +156,11 @@ export const useDocumentExtraction = () => {
           ...prev,
           [type]: result.data
         }));
+
+        // Auto-save to database for single file document types
+        if (user?.id) {
+          await autoSaveDocumentData(type, result.data);
+        }
 
         return true;
       } else {
@@ -162,9 +231,9 @@ export const useDocumentExtraction = () => {
           [type]: result.data.records
         }));
 
-        // Auto-save to database for MVR records
-        if (type === 'mvr' && user?.id) {
-          await autoSaveMVRData(result.data.records);
+        // Auto-save to database for all document types
+        if (user?.id) {
+          await autoSaveDocumentData(type, result.data.records);
         }
 
         return true;
@@ -217,10 +286,9 @@ export const useDocumentExtraction = () => {
         }
       }
 
-      // 如果处理了文件但没有MVR数据自动保存，则设置完成状态
-      if (hasProcessedFiles && !saveStatus?.includes('MVR data saved')) {
-        setSaveStatus('✅ Document processing completed successfully!');
-        setTimeout(() => setSaveStatus(null), 5000);
+      // 所有文档类型现在都会自动保存并创建Case
+      if (hasProcessedFiles) {
+        console.log('All documents processed and saved automatically');
       }
     } finally {
       setIsProcessing(false);

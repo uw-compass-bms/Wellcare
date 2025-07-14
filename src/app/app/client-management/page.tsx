@@ -2,408 +2,299 @@
 
 import { useState, useEffect } from 'react'
 import { useUser } from '@clerk/nextjs'
-import { 
-  MVRRecord,
-  getMVRRecords,
-  deleteMVRRecord
-} from '@/lib/supabase/client'
-import { PageHeader } from '@/components/ui/page-header'
-import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
-import { 
-  FileText, 
-  Calendar, 
-  User, 
-  AlertTriangle, 
-  Gavel, 
-  Eye, 
-  Trash2,
-  Plus,
-  ArrowRight
-} from 'lucide-react'
+import { getCases, getMVRRecordsByCase, MVRRecord, CaseRecord, deleteMVRRecord } from '@/lib/supabase/client'
 
-// Case summary interface for overview display
-interface CaseSummary {
-  id: string
-  client_name: string | null
-  licence_number: string | null
-  total_documents: number
-  document_types: {
-    mvr: number
-    autoplus: number
-    quote: number
-    application: number
-  }
-  last_updated: string
-  created_at: string
-}
-
-export default function CaseManagement() {
+export default function ClientManagementPage() {
   const { user } = useUser()
-  
-  // State management
+  const [cases, setCases] = useState<CaseRecord[]>([])
+  const [selectedCase, setSelectedCase] = useState<CaseRecord | null>(null)
+  const [mvrRecords, setMvrRecords] = useState<MVRRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [mvrRecords, setMvrRecords] = useState<MVRRecord[]>([])
-  const [selectedCase, setSelectedCase] = useState<string | null>(null)
-  const [viewMode, setViewMode] = useState<'overview' | 'details'>('overview')
+  const [deleteLoading, setDeleteLoading] = useState<string | null>(null)
 
-  // Load MVR records and transform to case summaries
-  const loadCaseData = async () => {
-    if (!user?.id) return
-    
+  // 获取案例列表
+  useEffect(() => {
+    if (user) {
+      loadCases()
+    }
+  }, [user])
+
+  const loadCases = async () => {
     try {
       setLoading(true)
-      setError(null)
-      
-      // Load MVR records (will expand to other document types later)
-      const mvrData = await getMVRRecords(user.id)
-      setMvrRecords(mvrData)
-      
-      console.log('✅ Loaded case data - MVR records:', mvrData.length)
+      const casesData = await getCases(user!.id)
+      setCases(casesData)
     } catch (err) {
-      console.error('Error loading case data:', err)
-      setError(err instanceof Error ? err.message : 'Failed to load case data')
+      setError('Failed to load cases')
+      console.error('Failed to load cases:', err)
     } finally {
       setLoading(false)
     }
   }
 
-  // Transform MVR records to case summaries
-  const getCaseSummaries = (): CaseSummary[] => {
-    // Group MVR records by client (licence_number + name combination)
-    const caseMap = new Map<string, CaseSummary>()
-    
-    mvrRecords.forEach(record => {
-      const caseKey = `${record.licence_number || 'unknown'}_${record.name || 'unknown'}`
-      
-      if (caseMap.has(caseKey)) {
-        const existingCase = caseMap.get(caseKey)!
-        existingCase.total_documents += 1
-        existingCase.document_types.mvr += 1
-        // Update last_updated if this record is newer
-        if (new Date(record.updated_at) > new Date(existingCase.last_updated)) {
-          existingCase.last_updated = record.updated_at
-        }
-      } else {
-        caseMap.set(caseKey, {
-          id: caseKey,
-          client_name: record.name,
-          licence_number: record.licence_number,
-          total_documents: 1,
-          document_types: {
-            mvr: 1,
-            autoplus: 0,
-            quote: 0,
-            application: 0
-          },
-          last_updated: record.updated_at,
-          created_at: record.created_at
-        })
-      }
-    })
-    
-    return Array.from(caseMap.values()).sort((a, b) => 
-      new Date(b.last_updated).getTime() - new Date(a.last_updated).getTime()
-    )
-  }
-
-  // Get MVR records for a specific case
-  const getCaseMVRRecords = (caseId: string): MVRRecord[] => {
-    const [licenceNumber, clientName] = caseId.split('_')
-    return mvrRecords.filter(record => 
-      (record.licence_number || 'unknown') === licenceNumber && 
-      (record.name || 'unknown') === clientName
-    )
-  }
-
-  // Delete MVR record
-  const handleDeleteMVR = async (recordId: string) => {
-    if (!confirm('Are you sure you want to delete this MVR record?')) return
-    
+  // 获取MVR记录
+  const loadMvrRecords = async (caseId: string) => {
     try {
-      setError(null)
-      await deleteMVRRecord(recordId)
-      console.log('✅ Deleted MVR record:', recordId)
-      await loadCaseData()
+      setLoading(true)
+      const mvrData = await getMVRRecordsByCase(caseId)
+      setMvrRecords(mvrData)
     } catch (err) {
-      console.error('Error deleting MVR record:', err)
-      setError(err instanceof Error ? err.message : 'Failed to delete MVR record')
+      setError('Failed to load MVR records')
+      console.error('Failed to load MVR records:', err)
+    } finally {
+      setLoading(false)
     }
   }
 
-  // View case details
-  const handleViewCase = (caseId: string) => {
-    setSelectedCase(caseId)
-    setViewMode('details')
-  }
-
-  // Back to overview
-  const handleBackToOverview = () => {
-    setSelectedCase(null)
-    setViewMode('overview')
-  }
-
-  // Initial data load
-  useEffect(() => {
-    if (user?.id) {
-      loadCaseData()
+  // 删除MVR记录
+  const handleDeleteMvrRecord = async (recordId: string) => {
+    if (!confirm('Are you sure you want to delete this MVR record?')) {
+      return
     }
-  }, [user?.id])
 
-  if (!user) {
+    try {
+      setDeleteLoading(recordId)
+      await deleteMVRRecord(recordId)
+      
+      // 重新加载MVR记录列表
+      if (selectedCase) {
+        await loadMvrRecords(selectedCase.id)
+      }
+      
+      // 重新加载案例列表以更新计数
+      await loadCases()
+      
+    } catch (err) {
+      setError('Failed to delete MVR record')
+      console.error('Failed to delete MVR record:', err)
+    } finally {
+      setDeleteLoading(null)
+    }
+  }
+
+  const handleCaseSelect = (caseRecord: CaseRecord) => {
+    setSelectedCase(caseRecord)
+    loadMvrRecords(caseRecord.id)
+  }
+
+  if (loading) {
     return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="text-center py-8">
-          <p className="text-gray-500">Please sign in to access case management</p>
-        </div>
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-lg">Loading...</div>
       </div>
     )
   }
 
-  const caseSummaries = getCaseSummaries()
+  if (error) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-red-500">Error: {error}</div>
+      </div>
+    )
+  }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <PageHeader 
-        title="Client Management" 
-        description="Review and manage client document cases"
-      />
+    <div className="container mx-auto px-4 py-8">
+      <h1 className="text-3xl font-bold mb-8">MVR Data Management</h1>
       
-      {/* Error display */}
-      {error && (
-        <Card className="mb-6 p-4 border-red-200 bg-red-50">
-          <p className="text-red-600">{error}</p>
-        </Card>
-      )}
-
-      {/* Navigation */}
-      {viewMode === 'details' && (
-        <div className="mb-6">
-          <Button 
-            variant="outline" 
-            onClick={handleBackToOverview}
-            className="mb-4"
-          >
-            ← Back to Cases Overview
-          </Button>
+      {/* 案例选择 */}
+      <div className="mb-8">
+        <h2 className="text-xl font-semibold mb-4">Select Case</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {cases.map((caseRecord) => (
+            <div
+              key={caseRecord.id}
+              onClick={() => handleCaseSelect(caseRecord)}
+              className={`border rounded-lg p-4 cursor-pointer transition-colors ${
+                selectedCase?.id === caseRecord.id
+                  ? 'border-blue-500 bg-blue-50'
+                  : 'border-gray-200 hover:border-gray-300'
+              }`}
+            >
+              <div className="font-semibold">{caseRecord.case_number}</div>
+              <div className="text-sm text-gray-600">{caseRecord.primary_contact_name || 'Unknown Contact'}</div>
+              <div className="text-sm text-gray-500 mt-2">
+                MVR Records: {caseRecord.mvr_count}
+              </div>
+            </div>
+          ))}
         </div>
-      )}
+      </div>
 
-      {/* Main content */}
-      {viewMode === 'overview' ? (
-        // Case Overview
-        <Card className="p-6 shadow-sm">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xl font-semibold">Cases Overview</h2>
-            <Button onClick={() => window.location.href = '/app/document-verification'}>
-              <Plus className="w-4 h-4 mr-2" />
-              New Document Extraction
-            </Button>
-          </div>
+      {/* MVR记录展示 */}
+      {selectedCase && (
+        <div>
+          <h2 className="text-xl font-semibold mb-4">
+            Case {selectedCase.case_number} - MVR Records ({mvrRecords.length})
+          </h2>
           
-          {loading ? (
-            <div className="text-center py-8">
-              <p className="text-gray-500">Loading cases...</p>
-            </div>
-          ) : caseSummaries.length === 0 ? (
-            <div className="text-center py-8">
-              <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-              <p className="text-gray-500 mb-4">No cases found</p>
-              <p className="text-sm text-gray-400">
-                Start by extracting documents in the Document Verification section
-              </p>
-            </div>
+          {mvrRecords.length === 0 ? (
+            <div className="text-gray-500">No MVR records found for this case</div>
           ) : (
-            <div className="space-y-4">
-              {caseSummaries.map((caseItem) => (
-                <Card key={caseItem.id} className="p-4 hover:shadow-md transition-shadow">
-                  <div className="flex justify-between items-start">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-2">
-                        <User className="w-5 h-5 text-blue-600" />
-                        <h3 className="font-semibold text-lg">
-                          {caseItem.client_name || 'Unknown Client'}
-                        </h3>
-                        <span className="text-sm text-gray-500">
-                          License: {caseItem.licence_number || 'N/A'}
-                        </span>
-                      </div>
-                      
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-3">
-                        <div className="flex items-center gap-2">
-                          <FileText className="w-4 h-4 text-blue-500" />
-                          <span className="text-sm">
-                            MVR: {caseItem.document_types.mvr}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <FileText className="w-4 h-4 text-green-500" />
-                          <span className="text-sm">
-                            Auto+: {caseItem.document_types.autoplus}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <FileText className="w-4 h-4 text-purple-500" />
-                          <span className="text-sm">
-                            Quote: {caseItem.document_types.quote}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <FileText className="w-4 h-4 text-orange-500" />
-                          <span className="text-sm">
-                            App: {caseItem.document_types.application}
-                          </span>
-                        </div>
-                      </div>
-                      
-                      <div className="flex items-center gap-4 text-sm text-gray-500">
-                        <div className="flex items-center gap-1">
-                          <Calendar className="w-4 h-4" />
-                          Updated: {new Date(caseItem.last_updated).toLocaleDateString()}
-                        </div>
-                        <div>
-                          Total Documents: {caseItem.total_documents}
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <Button 
-                      onClick={() => handleViewCase(caseItem.id)}
-                      className="ml-4"
-                    >
-                      <Eye className="w-4 h-4 mr-2" />
-                      View Details
-                      <ArrowRight className="w-4 h-4 ml-2" />
-                    </Button>
-                  </div>
-                </Card>
+            <div className="space-y-6">
+              {mvrRecords.map((record) => (
+                <MvrRecordCard 
+                  key={record.id} 
+                  record={record} 
+                  onDelete={handleDeleteMvrRecord}
+                  deleteLoading={deleteLoading === record.id}
+                />
               ))}
             </div>
           )}
-        </Card>
-      ) : (
-        // Case Details View
-        selectedCase && (
-          <div className="space-y-6">
-            {/* Case Header */}
-            <Card className="p-6 shadow-sm">
-              <div className="flex justify-between items-start">
-                <div>
-                  <h2 className="text-2xl font-bold mb-2">Case Details</h2>
-                  <div className="flex items-center gap-4 text-gray-600">
-                    <span>Client: {getCaseMVRRecords(selectedCase)[0]?.name || 'Unknown'}</span>
-                    <span>License: {getCaseMVRRecords(selectedCase)[0]?.licence_number || 'N/A'}</span>
-                  </div>
-                </div>
-              </div>
-            </Card>
-
-            {/* MVR Records Section */}
-            <Card className="p-6 shadow-sm">
-              <h3 className="text-xl font-semibold mb-4 flex items-center gap-2">
-                <FileText className="w-5 h-5 text-blue-600" />
-                MVR Records ({getCaseMVRRecords(selectedCase).length})
-              </h3>
-              
-              <div className="space-y-4">
-                {getCaseMVRRecords(selectedCase).map((record) => (
-                  <Card key={record.id} className="p-4 border-l-4 border-l-blue-500">
-                    <div className="flex justify-between items-start">
-                      <div className="flex-1">
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
-                          <div>
-                            <label className="text-sm font-medium text-gray-600">Name</label>
-                            <p className="text-sm">{record.name || 'N/A'}</p>
-                          </div>
-                          <div>
-                            <label className="text-sm font-medium text-gray-600">Gender</label>
-                            <p className="text-sm">{record.gender || 'N/A'}</p>
-                          </div>
-                          <div>
-                            <label className="text-sm font-medium text-gray-600">Date of Birth</label>
-                            <p className="text-sm">{record.date_of_birth || 'N/A'}</p>
-                          </div>
-                          <div>
-                            <label className="text-sm font-medium text-gray-600">License Class</label>
-                            <p className="text-sm">{record.class || 'N/A'}</p>
-                          </div>
-                          <div>
-                            <label className="text-sm font-medium text-gray-600">Status</label>
-                            <p className="text-sm">{record.status || 'N/A'}</p>
-                          </div>
-                          <div>
-                            <label className="text-sm font-medium text-gray-600">Issue Date</label>
-                            <p className="text-sm">{record.issue_date || 'N/A'}</p>
-                          </div>
-                        </div>
-                        
-                        {/* Conditions */}
-                        {record.conditions && record.conditions.length > 0 && (
-                          <div className="mb-4">
-                            <label className="text-sm font-medium text-gray-600 flex items-center gap-1 mb-2">
-                              <AlertTriangle className="w-4 h-4 text-yellow-500" />
-                              Conditions ({record.conditions.length})
-                            </label>
-                            <div className="space-y-2">
-                              {record.conditions.map((condition) => (
-                                <div key={condition.id} className="bg-yellow-50 p-2 rounded border-l-2 border-yellow-300">
-                                  <div className="text-sm">
-                                    <span className="font-medium">
-                                      {condition.condition_date || 'No date'}:
-                                    </span>
-                                    {' ' + condition.description}
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                        
-                        {/* Convictions */}
-                        {record.convictions && record.convictions.length > 0 && (
-                          <div className="mb-4">
-                            <label className="text-sm font-medium text-gray-600 flex items-center gap-1 mb-2">
-                              <Gavel className="w-4 h-4 text-red-500" />
-                              Convictions ({record.convictions.length})
-                            </label>
-                            <div className="space-y-2">
-                              {record.convictions.map((conviction) => (
-                                <div key={conviction.id} className="bg-red-50 p-2 rounded border-l-2 border-red-300">
-                                  <div className="text-sm">
-                                    <span className="font-medium">
-                                      {conviction.conviction_date || 'No date'}:
-                                    </span>
-                                    {' ' + conviction.description}
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                        
-                        <div className="text-xs text-gray-500">
-                          File: {record.file_name || 'Unknown'} | 
-                          Created: {new Date(record.created_at).toLocaleString()}
-                        </div>
-                      </div>
-                      
-                      <Button 
-                        variant="destructive" 
-                        size="sm"
-                        onClick={() => handleDeleteMVR(record.id)}
-                        className="ml-4"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </Card>
-                ))}
-              </div>
-            </Card>
-          </div>
-        )
+        </div>
       )}
     </div>
   )
-} 
+}
+
+// MVR记录卡片组件
+function MvrRecordCard({ 
+  record, 
+  onDelete, 
+  deleteLoading 
+}: { 
+  record: MVRRecord
+  onDelete: (recordId: string) => Promise<void>
+  deleteLoading: boolean
+}) {
+  return (
+    <div className="border rounded-lg p-6 bg-white shadow-sm">
+      {/* 头部删除按钮 */}
+      <div className="flex justify-between items-start mb-4">
+        <h3 className="text-lg font-medium">MVR Record</h3>
+        <button
+          onClick={() => onDelete(record.id)}
+          disabled={deleteLoading}
+          className={`px-3 py-1 text-sm rounded-md transition-colors ${
+            deleteLoading
+              ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+              : 'bg-red-100 text-red-600 hover:bg-red-200'
+          }`}
+        >
+          {deleteLoading ? 'Deleting...' : 'Delete'}
+        </button>
+      </div>
+
+      {/* 基本信息 */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+          <div className="text-sm">{record.name || 'Unknown'}</div>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">License Number</label>
+          <div className="text-sm">{record.licence_number || 'Unknown'}</div>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Gender</label>
+          <div className="text-sm">{record.gender || 'Unknown'}</div>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Date of Birth</label>
+          <div className="text-sm">{record.date_of_birth || 'Unknown'}</div>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">License Class</label>
+          <div className="text-sm">{record.class || 'Unknown'}</div>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+          <div className="text-sm">{record.status || 'Unknown'}</div>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Issue Date</label>
+          <div className="text-sm">{record.issue_date || 'Unknown'}</div>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Expiry Date</label>
+          <div className="text-sm">{record.expiry_date || 'Unknown'}</div>
+        </div>
+      </div>
+
+      {/* 地址 */}
+      {record.address && (
+        <div className="mb-6">
+          <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
+          <div className="text-sm whitespace-pre-line">{record.address}</div>
+        </div>
+      )}
+
+      {/* 违规条件 */}
+      {record.conditions && record.conditions.length > 0 && (
+        <div className="mb-6">
+          <h3 className="text-lg font-medium mb-3">Conditions ({record.conditions.length})</h3>
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Date
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Description
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {record.conditions.map((condition, index) => (
+                  <tr key={index}>
+                    <td className="px-4 py-2 text-sm text-gray-900">
+                      {condition.date || 'Unknown'}
+                    </td>
+                    <td className="px-4 py-2 text-sm text-gray-900">
+                      {condition.description}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* 定罪记录 */}
+      {record.convictions && record.convictions.length > 0 && (
+        <div>
+          <h3 className="text-lg font-medium mb-3">Convictions ({record.convictions.length})</h3>
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Date
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Description
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {record.convictions.map((conviction, index) => (
+                  <tr key={index}>
+                    <td className="px-4 py-2 text-sm text-gray-900">
+                      {conviction.date || 'Unknown'}
+                    </td>
+                    <td className="px-4 py-2 text-sm text-gray-900">
+                      {conviction.description}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* 文件信息 */}
+      {record.file_name && (
+        <div className="mt-6 pt-4 border-t">
+          <div className="text-sm text-gray-500">
+            Source File: {record.file_name}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
