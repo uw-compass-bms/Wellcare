@@ -2,7 +2,7 @@
 import { UserButton } from "@clerk/nextjs";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { FileText, Users } from 'lucide-react';
+import { FileText, Users, PenTool } from 'lucide-react';
 
 export default function AppLayout({
   children,
@@ -24,8 +24,16 @@ export default function AppLayout({
       href: '/app/client-management',
       icon: Users,
       current: pathname === '/app/client-management'
+    },
+    {
+      name: 'Electronic Signature',
+      href: '/app/signature',
+      icon: PenTool,
+      current: pathname.startsWith('/app/signature')
     }
   ];
+
+
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -91,6 +99,8 @@ export default function AppLayout({
           </div>
         </div>
       </nav>
+
+
 
       {/* Main content area */}
       <main className="flex-1">
