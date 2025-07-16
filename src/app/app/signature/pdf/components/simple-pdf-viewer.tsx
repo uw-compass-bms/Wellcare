@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
+import { convertDragEventToPosition } from '@/lib/utils/coordinates';
 
 interface FileInfo {
   id: string;
@@ -33,6 +34,7 @@ interface SimplePDFViewerProps {
   onPositionSelect: (position: SignaturePosition | null) => void;
   onPositionUpdate: (position: SignaturePosition) => void;
   onPositionDelete: (positionId: string) => void;
+  onPositionAdd?: (position: Omit<SignaturePosition, 'id'>) => void;
 }
 
 export default function SimplePDFViewer({
@@ -43,10 +45,13 @@ export default function SimplePDFViewer({
   selectedPosition,
   onPositionSelect,
   onPositionUpdate,
-  onPositionDelete
+  onPositionDelete,
+  onPositionAdd
 }: SimplePDFViewerProps) {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [draggedItem, setDraggedItem] = useState<string | null>(null);
+  const pdfContainerRef = useRef<HTMLDivElement>(null);
 
   const currentFile = files.find(f => f.id === currentFileId);
   const currentPagePositions = positions.filter(
@@ -56,6 +61,106 @@ export default function SimplePDFViewer({
   // 调试日志
   console.log('SimplePDFViewer - Current file:', currentFile);
   console.log('SimplePDFViewer - File URL:', currentFile?.supabaseUrl);
+
+  // 处理拖拽开始事件（从父组件传递）
+  const handleDragStart = (event: React.DragEvent, itemType: string) => {
+    setDraggedItem(itemType);
+    event.dataTransfer.setData('text/plain', itemType);
+    event.dataTransfer.effectAllowed = 'copy';
+  };
+
+  // 处理拖拽悬停
+  const handleDragOver = (event: React.DragEvent) => {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'copy';
+  };
+
+  // 处理拖拽离开
+  const handleDragLeave = (event: React.DragEvent) => {
+    event.preventDefault();
+  };
+
+  // 处理拖拽放置（使用坐标转换工具）
+  const handleDrop = (event: React.DragEvent) => {
+    event.preventDefault();
+    setDraggedItem(null);
+
+    if (!pdfContainerRef.current || !onPositionAdd) {
+      return;
+    }
+
+    const itemType = event.dataTransfer.getData('text/plain');
+    if (!itemType) {
+      return;
+    }
+
+    try {
+      // 使用坐标转换工具计算精确位置
+      const positionData = convertDragEventToPosition(
+        event,
+        pdfContainerRef.current,
+        itemType,
+        currentFileId,
+        currentPageNumber
+      );
+
+      console.log('拖拽位置数据:', {
+        itemType,
+        pixelPosition: positionData.pixelPosition,
+        percentagePosition: positionData.percentagePosition,
+        containerDimensions: positionData.containerDimensions
+      });
+
+      // 创建新的签名位置（使用像素坐标，API会自动转换为百分比）
+      const newPosition: Omit<SignaturePosition, 'id'> = {
+        recipientId: 'temp-recipient', // 临时值，稍后需要从实际收件人中选择
+        fileId: currentFileId,
+        pageNumber: currentPageNumber,
+        x: positionData.pixelPosition.x,
+        y: positionData.pixelPosition.y,
+        width: positionData.pixelPosition.width,
+        height: positionData.pixelPosition.height,
+        placeholderText: getPlaceholderText(itemType)
+      };
+
+      console.log('新建签名位置:', newPosition);
+      onPositionAdd(newPosition);
+
+    } catch (error) {
+      console.error('拖拽位置计算错误:', error);
+      // Fallback to simple calculation
+      const rect = pdfContainerRef.current.getBoundingClientRect();
+      const relativeX = event.clientX - rect.left;
+      const relativeY = event.clientY - rect.top;
+      
+      const newPosition: Omit<SignaturePosition, 'id'> = {
+        recipientId: 'temp-recipient',
+        fileId: currentFileId,
+        pageNumber: currentPageNumber,
+        x: Math.max(0, relativeX - 60),
+        y: Math.max(0, relativeY - 20),
+        width: 120,
+        height: 40,
+        placeholderText: getPlaceholderText(itemType)
+      };
+
+      onPositionAdd(newPosition);
+    }
+  };
+
+  // 根据拖拽类型获取占位符文本
+  const getPlaceholderText = (itemType: string): string => {
+    switch (itemType) {
+      case 'signature':
+        return 'Click to sign';
+      case 'date':
+        return 'Date';
+      case 'text':
+        return 'Text field';
+      default:
+        return 'Click here';
+    }
+  };
 
   if (!currentFile) {
     return (
@@ -100,9 +205,20 @@ export default function SimplePDFViewer({
           </div>
         </div>
 
-        {/* PDF 显示区域 */}
-        <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-          <div className="relative min-h-[800px]">
+        {/* PDF 显示区域 - 支持拖拽 */}
+        <div 
+          className={`bg-white rounded-lg shadow-sm overflow-hidden transition-all ${
+            draggedItem ? 'ring-2 ring-blue-300 ring-opacity-50' : ''
+          }`}
+        >
+          <div 
+            ref={pdfContainerRef}
+            data-pdf-container
+            className="relative min-h-[800px]"
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+          >
             {/* 使用iframe显示PDF */}
             <iframe
               src={`${currentFile.supabaseUrl}#page=${currentPageNumber}`}
@@ -118,9 +234,20 @@ export default function SimplePDFViewer({
               }}
             />
 
+            {/* 拖拽提示覆盖层 */}
+            {draggedItem && (
+              <div className="absolute inset-0 bg-blue-50 bg-opacity-80 flex items-center justify-center pointer-events-none z-10">
+                <div className="text-center text-blue-600">
+                  <div className="text-4xl mb-2">📝</div>
+                  <div className="text-lg font-medium">Drop here to add signature position</div>
+                  <div className="text-sm">Release to place a {draggedItem} field</div>
+                </div>
+              </div>
+            )}
+
             {/* 加载状态 */}
             {loading && (
-              <div className="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center">
+              <div className="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center z-20">
                 <div className="text-center">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600 mx-auto mb-4"></div>
                   <p className="text-gray-600">Loading PDF...</p>
@@ -130,7 +257,7 @@ export default function SimplePDFViewer({
 
             {/* 错误状态 */}
             {error && (
-              <div className="absolute inset-0 bg-white bg-opacity-90 flex items-center justify-center">
+              <div className="absolute inset-0 bg-white bg-opacity-90 flex items-center justify-center z-20">
                 <div className="text-center text-red-500">
                   <div className="text-6xl mb-4">❌</div>
                   <h3 className="text-lg font-medium mb-2">Error Loading PDF</h3>
@@ -140,8 +267,8 @@ export default function SimplePDFViewer({
               </div>
             )}
 
-            {/* 渲染签名位置框 - 暂时放在PDF上层 */}
-            <div className="absolute inset-0 pointer-events-none">
+            {/* 渲染签名位置框 */}
+            <div className="absolute inset-0 pointer-events-none z-30">
               {currentPagePositions.map((position) => (
                 <div
                   key={position.id || `${position.x}-${position.y}`}
@@ -184,4 +311,7 @@ export default function SimplePDFViewer({
       </div>
     </div>
   );
-} 
+}
+
+// 导出拖拽处理函数供父组件使用
+export { SimplePDFViewer }; 
