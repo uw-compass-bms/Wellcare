@@ -8,7 +8,7 @@ import { supabase } from '@/lib/supabase/client'
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // JWT认证
@@ -20,7 +20,8 @@ export async function GET(
       )
     }
 
-    const recipientId = params.id
+    const resolvedParams = await params
+    const recipientId = resolvedParams.id
 
     // 验证收件人存在且属于用户的任务
     const { data: recipient, error: recipientError } = await supabase
@@ -65,7 +66,6 @@ export async function GET(
         )
       `)
       .eq('recipient_id', recipientId)
-      .order('signature_files.file_order', { ascending: true })
       .order('page_number', { ascending: true })
 
     if (positionsError) {

@@ -14,7 +14,7 @@ import {
  */
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // JWT认证
@@ -26,7 +26,8 @@ export async function PUT(
       )
     }
 
-    const positionId = params.id
+    const resolvedParams = await params
+    const positionId = resolvedParams.id
     const body = await request.json()
     const { 
       x, 
@@ -271,7 +272,7 @@ export async function PUT(
  */
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // JWT认证
@@ -283,7 +284,8 @@ export async function DELETE(
       )
     }
 
-    const positionId = params.id
+    const resolvedParams = await params
+    const positionId = resolvedParams.id
 
     // 验证位置存在且属于用户的任务
     const { data: existingPosition, error: fetchError } = await supabase

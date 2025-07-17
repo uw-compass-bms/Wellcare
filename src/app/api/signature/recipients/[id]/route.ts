@@ -7,7 +7,7 @@ import { supabase } from '@/lib/supabase/client'
  */
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // JWT认证
@@ -19,7 +19,8 @@ export async function PUT(
       )
     }
 
-    const recipientId = params.id
+    const resolvedParams = await params
+    const recipientId = resolvedParams.id
     const body = await request.json()
     const { name, email } = body
 

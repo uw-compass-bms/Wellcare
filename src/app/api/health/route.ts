@@ -1,141 +1,92 @@
-import { NextResponse } from 'next/server'
-import { supabase, supabaseAdmin } from '@/lib/supabase/client'
+import { NextRequest, NextResponse } from 'next/server'
+import { validateAuth } from '@/lib/auth/middleware'
+import { testDbConnection } from '@/lib/database/queries'
+import { supabase } from '@/lib/supabase/client'
 
-export async function GET() {
-  const healthStatus = {
-    timestamp: new Date().toISOString(),
-    status: 'healthy',
-    services: {
-      database: { status: 'unknown', message: '' },
-      storage: { status: 'unknown', message: '' },
-      auth: { status: 'unknown', message: '' }
-    },
-    environment: {
-      hasSupabaseUrl: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
-      hasAnonKey: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-      hasServiceKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
-      nodeEnv: process.env.NODE_ENV
-    }
-  }
-
-  // 测试数据库连接
+export async function GET(request: NextRequest) {
   try {
-    const { data, error } = await supabase
-      .from('signature_tasks')
-      .select('count')
-      .limit(1)
+    console.log('Health check started...')
     
-    if (error) {
-      // 如果表不存在，这是预期的，因为我们还没有创建签名相关的表
-      if (error.code === 'PGRST116' || error.message.includes('does not exist')) {
-        healthStatus.services.database = {
-          status: 'ready_for_setup',
-          message: 'Database connected, signature tables need to be created'
-        }
-      } else {
-        throw error
+    const healthStatus = {
+      timestamp: new Date().toISOString(),
+      status: 'healthy',
+      services: {
+        database: { status: 'unknown', message: '' },
+        clerk_auth: { status: 'unknown', message: '' }
+      },
+      environment: {
+        hasSupabaseUrl: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
+        hasSupabaseAnonKey: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+        hasClerkPublishableKey: !!process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
+        hasClerkSecretKey: !!process.env.CLERK_SECRET_KEY,
+        nodeEnv: process.env.NODE_ENV
       }
-    } else {
+    }
+
+    // 1. 测试数据库连接
+    console.log('Testing database connection...')
+    const dbResult = await testDbConnection()
+    console.log('Database test result:', dbResult)
+    
+    if (dbResult.success) {
       healthStatus.services.database = {
         status: 'healthy',
         message: 'Database connected and signature tables exist'
       }
-    }
-  } catch (error) {
-    healthStatus.services.database = {
-      status: 'error',
-      message: `Database connection failed: ${error instanceof Error ? error.message : 'Unknown error'}`
-    }
-    healthStatus.status = 'degraded'
-  }
-
-  // 测试存储桶访问
-  try {
-    // 使用管理员客户端检查存储桶，因为普通客户端可能没有权限查看所有桶
-    const storageClient = supabaseAdmin || supabase
-    const { data: buckets, error: bucketsError } = await storageClient.storage.listBuckets()
-    
-    if (bucketsError) {
-      throw bucketsError
-    }
-
-    const signatureBucket = buckets?.find(bucket => bucket.name === 'signature-files')
-    
-    if (signatureBucket) {
-      // 测试存储桶访问权限 - 如果权限不足也不认为是错误
-      try {
-        const { data: files, error: filesError } = await supabase.storage
-          .from('signature-files')
-          .list('', { limit: 1 })
-        
-        if (filesError) {
-          // 如果是权限错误，桶存在但可能需要配置策略
-          healthStatus.services.storage = {
-            status: 'healthy',
-            message: `Storage bucket exists (${filesError.message})`
-          }
-        } else {
-          healthStatus.services.storage = {
-            status: 'healthy',
-            message: 'Storage bucket exists and accessible'
-          }
-        }
-      } catch (accessError) {
-        healthStatus.services.storage = {
-          status: 'healthy',
-          message: 'Storage bucket exists, access policies may need configuration'
-        }
-      }
     } else {
-      healthStatus.services.storage = {
-        status: 'ready_for_setup',
-        message: 'Storage connected, signature-files bucket needs to be created'
+      healthStatus.services.database = {
+        status: 'error',
+        message: `Database connection failed: ${dbResult.error}`
       }
+      healthStatus.status = 'degraded'
     }
-  } catch (error) {
-    healthStatus.services.storage = {
-      status: 'error',
-      message: `Storage access failed: ${error instanceof Error ? error.message : 'Unknown error'}`
-    }
-    healthStatus.status = 'degraded'
-  }
 
-  // 测试认证配置
-  try {
-    if (supabaseAdmin) {
-      // 简单测试管理员客户端
-      const { data, error } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1 })
+    // 2. 测试Clerk认证（可选）
+    let authResult = null
+    try {
+      console.log('Testing Clerk authentication...')
+      authResult = await validateAuth()
+      console.log('Auth test result:', authResult)
       
-      if (error) {
-        throw error
+      if (authResult.success) {
+        healthStatus.services.clerk_auth = {
+          status: 'authenticated',
+          message: `User authenticated: ${authResult.userId}`
+        }
+      } else {
+        healthStatus.services.clerk_auth = {
+          status: 'unauthenticated',
+          message: authResult.error || 'No authentication provided'
+        }
       }
-
-      healthStatus.services.auth = {
-        status: 'healthy',
-        message: 'Auth service accessible with admin privileges'
-      }
-    } else {
-      healthStatus.services.auth = {
-        status: 'limited',
-        message: 'Auth service accessible, admin key not configured'
+    } catch (authError) {
+      console.log('Auth error (expected for unauthenticated requests):', authError)
+      healthStatus.services.clerk_auth = {
+        status: 'unauthenticated',
+        message: 'No authentication provided (this is normal for health checks)'
       }
     }
+
+    // 3. 返回健康状态
+    console.log('Health check completed:', healthStatus)
+    
+    // 确定整体状态
+    const hasErrors = Object.values(healthStatus.services).some(service => service.status === 'error')
+    if (hasErrors) {
+      healthStatus.status = 'unhealthy'
+    }
+    
+    const httpStatus = healthStatus.status === 'unhealthy' ? 503 : 200
+    return NextResponse.json(healthStatus, { status: httpStatus })
+    
   } catch (error) {
-    healthStatus.services.auth = {
+    console.error('Health check failed:', error)
+    
+    return NextResponse.json({
       status: 'error',
-      message: `Auth service failed: ${error instanceof Error ? error.message : 'Unknown error'}`
-    }
-    healthStatus.status = 'degraded'
+      timestamp: new Date().toISOString(),
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined
+    }, { status: 500 })
   }
-
-  // 确定整体状态
-  const hasErrors = Object.values(healthStatus.services).some(service => service.status === 'error')
-  if (hasErrors) {
-    healthStatus.status = 'unhealthy'
-  }
-
-  // 根据状态返回对应的HTTP状态码
-  const httpStatus = healthStatus.status === 'unhealthy' ? 503 : 200
-
-  return NextResponse.json(healthStatus, { status: httpStatus })
 } 

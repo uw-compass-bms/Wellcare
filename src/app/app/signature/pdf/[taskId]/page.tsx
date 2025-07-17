@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { useAuth } from '@clerk/nextjs';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Save, Send } from 'lucide-react';
 import dynamic from 'next/dynamic';
@@ -62,6 +63,7 @@ interface FileInfo {
 export default function PDFSignaturePage() {
   const params = useParams();
   const router = useRouter();
+  const { isLoaded, isSignedIn, getToken } = useAuth();
   const taskId = params.taskId as string;
 
   const [task, setTask] = useState<TaskInfo | null>(null);
@@ -80,16 +82,40 @@ export default function PDFSignaturePage() {
   const [savingPosition, setSavingPosition] = useState<boolean>(false);
   const [selectedRecipientId, setSelectedRecipientId] = useState<string>('');
 
+  // 认证检查
+  useEffect(() => {
+    if (isLoaded && !isSignedIn) {
+      // 用户未登录，重定向到登录页面
+      router.push('/sign-in');
+    }
+  }, [isLoaded, isSignedIn, router]);
+
+  // 获取认证token的辅助函数
+  const getAuthHeaders = async () => {
+    const token = await getToken();
+    return {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    };
+  };
+
   // Load task data
   useEffect(() => {
-    loadTaskData();
-  }, [taskId]);
+    if (isLoaded && isSignedIn) {
+      loadTaskData();
+    }
+  }, [taskId, isLoaded, isSignedIn]);
 
   // 加载收件人数据
   useEffect(() => {
     const loadRecipients = async () => {
+      if (!isLoaded || !isSignedIn) return;
+      
       try {
-        const response = await fetch(`/api/signature/tasks/${taskId}/recipients`);
+        const headers = await getAuthHeaders();
+        const response = await fetch(`/api/signature/tasks/${taskId}/recipients`, {
+          headers
+        });
         const data = await response.json();
         if (data.success && Array.isArray(data.data)) {
           // 转换API返回的数据为RecipientInfo类型
@@ -111,7 +137,7 @@ export default function PDFSignaturePage() {
     };
     
     loadRecipients();
-  }, [taskId]);
+  }, [taskId, isLoaded, isSignedIn]);
 
   // Set default file when files load
   useEffect(() => {
@@ -136,18 +162,25 @@ export default function PDFSignaturePage() {
   }, [recipients]);
 
   const loadSignaturePositions = async () => {
-    if (recipients.length === 0) return;
+    if (recipients.length === 0 || !isLoaded || !isSignedIn) return;
 
     setLoadingPositions(true);
     try {
+      const headers = await getAuthHeaders();
       const allPositions: SignaturePosition[] = [];
       
       for (const recipient of recipients) {
-        const result = await getRecipientPositions(recipient.id);
-        if (result.success && result.data) {
-          allPositions.push(...result.data);
+        const response = await fetch(`/api/signature/recipients/${recipient.id}/positions`, {
+          headers
+        });
+        
+        if (response.ok) {
+          const result = await response.json();
+          if (result.success && result.data) {
+            allPositions.push(...result.data);
+          }
         } else {
-          console.warn(`Failed to load positions for recipient ${recipient.name}:`, result.error);
+          console.warn(`Failed to load positions for recipient ${recipient.name}`);
         }
       }
 
@@ -161,10 +194,13 @@ export default function PDFSignaturePage() {
   };
 
   const loadTaskData = async () => {
+    if (!isLoaded || !isSignedIn) return;
+    
     try {
+      const headers = await getAuthHeaders();
       const [taskResponse, recipientsResponse] = await Promise.all([
-        fetch(`/api/signature/tasks/${taskId}`),
-        fetch(`/api/signature/tasks/${taskId}/recipients`)
+        fetch(`/api/signature/tasks/${taskId}`, { headers }),
+        fetch(`/api/signature/tasks/${taskId}/recipients`, { headers })
       ]);
 
       if (taskResponse.ok) {
@@ -482,12 +518,30 @@ export default function PDFSignaturePage() {
     setDraggedItem(null);
   };
 
-  if (loading) {
+  // Show loading while Clerk is initializing or while data is loading
+  if (!isLoaded || loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading PDF signature setup...</p>
+          <p className="text-gray-600">
+            {!isLoaded ? 'Initializing...' : 'Loading PDF signature setup...'}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Redirect to sign-in if not authenticated (this should be handled by the useEffect above)
+  if (!isSignedIn) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">Authentication Required</h2>
+          <p className="text-gray-600 mb-4">Please sign in to access this page</p>
+          <Button onClick={() => router.push('/sign-in')} variant="outline">
+            Sign In
+          </Button>
         </div>
       </div>
     );

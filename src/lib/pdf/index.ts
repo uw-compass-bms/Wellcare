@@ -8,8 +8,12 @@ export { PDFProcessor, createPDFProcessor, analyzePDFFile, validatePDFFile } fro
 export { PDFReader, createPDFReader } from './pdf-reader';
 export { PDFAnalyzer, createPDFAnalyzer, analyzePDFQuickInfo } from './pdf-analyzer';
 export { PDFOperations, createPDFOperations, prepareDocumentForSigning } from './pdf-operations';
+export { SignatureComposer, createSignatureComposer, composeSignatures } from './signature-composer';
+export { SignatureEmbedder, createSignatureEmbedder } from './signature-embedder';
+export { SignatureRenderer, createSignatureRenderer } from './signature-renderer';
+export { SignatureStyleManager, createSignatureStyleManager } from './signature-styles';
 
-// 基础类型定义（来自 pdf-types）
+// 基础类型定义
 export type {
   SignatureElement,
   PDFPageInfo,
@@ -22,13 +26,13 @@ export type {
   MultiPDFOperation
 } from './pdf-types';
 
-// 分析器类型（来自 pdf-analyzer）
+// 分析器类型
 export type { 
   DocumentStructureAnalysis, 
   RecommendedSignatureArea 
 } from './pdf-analyzer';
 
-// 操作器类型（来自 pdf-operations）
+// 操作器类型
 export type { 
   PreparedDocument, 
   DocumentFonts, 
@@ -37,7 +41,7 @@ export type {
   ElementConflict 
 } from './pdf-operations';
 
-// 处理器类型（来自 pdf-processor）
+// 处理器类型
 export type {
   PDFProcessInput,
   DocumentAnalysisResult,
@@ -47,6 +51,27 @@ export type {
   PreparedDocumentResult,
   BatchProcessingResult
 } from './pdf-processor';
+
+// 渲染器类型
+export type {
+  SignatureRenderInstruction,
+  SignatureRenderConfig,
+  RenderResult
+} from './signature-renderer';
+
+// 样式管理器类型
+export type {
+  SignatureStyleConfig,
+  ComputedSignatureStyle,
+  StyleApplicationResult
+} from './signature-styles';
+
+// 嵌入器类型
+export type {
+  SignatureEmbedConfig,
+  EmbedOperationResult,
+  BatchEmbedResult
+} from './signature-embedder';
 
 // 枚举导出
 export { SignatureElementType, PDFErrorCode } from './pdf-types';
