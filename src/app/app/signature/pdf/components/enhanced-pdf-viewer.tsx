@@ -4,8 +4,11 @@ import React, { useState, useRef, useEffect } from 'react';
 import { 
   convertDragToSignaturePosition,
   normalizedToPixelPosition,
-  generateUniqueKey,
-  getPlaceholderText
+  updatePositionAfterDrag,
+  getContainerScale,
+  PDFDimensions,
+  ContainerDimensions,
+  WidgetType
 } from '@/lib/utils/coordinates-enhanced';
 import { 
   FileInfo, 
@@ -13,8 +16,9 @@ import {
   SignaturePositionData 
 } from '@/lib/types/signature';
 import PDFPagination from './pdf-pagination';
+import { PDFDocument } from 'pdf-lib';
 
-export interface SimplePDFViewerProps {
+export interface EnhancedPDFViewerProps {
   files: FileInfo[];
   recipients: RecipientInfo[];
   currentFileId: string;
@@ -27,10 +31,12 @@ export interface SimplePDFViewerProps {
   onPositionDelete: (positionId: string) => void;
   onPositionAdd: (position: Omit<SignaturePositionData, 'key'>) => void;
   onPageChange: (pageNumber: number) => void;
-  draggedWidgetType?: string | null;
+  draggedWidgetType?: WidgetType | null;
+  scale?: number;
+  pdfDimensions?: PDFDimensions[];
 }
 
-const SimplePDFViewer: React.FC<SimplePDFViewerProps> = ({
+const EnhancedPDFViewer: React.FC<EnhancedPDFViewerProps> = ({
   files,
   recipients,
   currentFileId,
@@ -43,11 +49,15 @@ const SimplePDFViewer: React.FC<SimplePDFViewerProps> = ({
   onPositionDelete,
   onPositionAdd,
   onPageChange,
-  draggedWidgetType
+  draggedWidgetType,
+  scale = 1,
+  pdfDimensions = []
 }) => {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [totalPages, setTotalPages] = useState(1);
+  const [containerDimensions, setContainerDimensions] = useState<ContainerDimensions>({ width: 0, height: 0 });
   const [isDragOver, setIsDragOver] = useState(false);
-  const [containerDimensions, setContainerDimensions] = useState({ width: 800, height: 1132 });
   
   const pdfContainerRef = useRef<HTMLDivElement>(null);
   const embedRef = useRef<HTMLEmbedElement>(null);
@@ -55,23 +65,69 @@ const SimplePDFViewer: React.FC<SimplePDFViewerProps> = ({
   const currentFile = files.find(f => f.id === currentFileId);
   const currentPagePositions = positions.filter(p => p.pageNumber === currentPageNumber);
 
-  // 简化的PDF页面计数 - 暂时使用固定值避免解析错误
+  // Function to get PDF page count with better error handling
+  const getPDFPageCount = async (pdfUrl: string): Promise<number> => {
+    try {
+      // Validate URL format
+      if (!pdfUrl || !pdfUrl.startsWith('http')) {
+        console.warn('Invalid PDF URL:', pdfUrl);
+        return 1;
+      }
+
+      const response = await fetch(pdfUrl, {
+        headers: {
+          'Accept': 'application/pdf'
+        }
+      });
+      
+      if (!response.ok) {
+        console.warn('Failed to fetch PDF:', response.status, response.statusText);
+        return 1;
+      }
+
+      const contentType = response.headers.get('content-type');
+      if (!contentType?.includes('application/pdf')) {
+        console.warn('Response is not a PDF:', contentType);
+        return 1;
+      }
+
+      const arrayBuffer = await response.arrayBuffer();
+      
+      // Check if arrayBuffer has minimum PDF size
+      if (arrayBuffer.byteLength < 1024) {
+        console.warn('PDF file too small or corrupted');
+        return 1;
+      }
+
+      const pdfDoc = await PDFDocument.load(arrayBuffer);
+      const pageCount = pdfDoc.getPageCount();
+      console.log('PDF page count loaded successfully:', pageCount);
+      return pageCount;
+    } catch (error) {
+      console.error('Error getting PDF page count:', error);
+      // Return 1 as safe default, but also set an error state
+      setError('PDF loading failed, using default page settings');
+      return 1;
+    }
+  };
+
+  // Load PDF page count when current file changes
   useEffect(() => {
     if (currentFile?.supabaseUrl) {
-      // 暂时设置为默认值，避免PDF解析错误
-      setTotalPages(5); // 可以根据实际需要调整
-      console.log('Using default page count to avoid PDF parsing errors');
+      getPDFPageCount(currentFile.supabaseUrl).then(pageCount => {
+        setTotalPages(pageCount);
+      });
     }
   }, [currentFile?.supabaseUrl]);
 
-  // 更新容器尺寸
+  // Update container dimensions on resize
   useEffect(() => {
     const updateDimensions = () => {
       if (pdfContainerRef.current) {
         const rect = pdfContainerRef.current.getBoundingClientRect();
         setContainerDimensions({
-          width: rect.width || 800,
-          height: rect.height || 1132
+          width: rect.width,
+          height: rect.height
         });
       }
     };
@@ -81,67 +137,45 @@ const SimplePDFViewer: React.FC<SimplePDFViewerProps> = ({
     return () => window.removeEventListener('resize', updateDimensions);
   }, []);
 
-  // 处理拖拽悬停
+  // Handle drag over
   const handleDragOver = (event: React.DragEvent) => {
     event.preventDefault();
     event.dataTransfer.dropEffect = 'copy';
     setIsDragOver(true);
   };
 
-  // 处理拖拽离开
-  const handleDragLeave = (event: React.DragEvent) => {
-    // 只有当鼠标真正离开容器时才设置为false
-    if (!pdfContainerRef.current?.contains(event.relatedTarget as Node)) {
-      setIsDragOver(false);
-    }
+  // Handle drag leave
+  const handleDragLeave = () => {
+    setIsDragOver(false);
   };
 
-  // 处理拖拽放置
+  // Handle drop
   const handleDrop = (event: React.DragEvent) => {
     event.preventDefault();
     setIsDragOver(false);
 
     const droppedType = event.dataTransfer.getData('text/plain');
     
-    if (!droppedType || !pdfContainerRef.current || !selectedRecipientId) {
-      console.warn('Drop failed: missing data', { droppedType, selectedRecipientId });
-      return;
-    }
+    if (!droppedType || !pdfContainerRef.current || !selectedRecipientId) return;
 
     const containerRect = pdfContainerRef.current.getBoundingClientRect();
     const dropX = event.clientX - containerRect.left;
     const dropY = event.clientY - containerRect.top;
 
-    console.log('Drop position:', { dropX, dropY, containerWidth: containerRect.width });
+    const containerScale = containerDimensions.width;
+    
+    const newPosition = convertDragToSignaturePosition({
+      type: droppedType,
+      x: dropX,
+      y: dropY,
+      containerScale,
+      pageNumber: currentPageNumber,
+      recipientId: selectedRecipientId
+    });
 
-    try {
-      const newPosition = convertDragToSignaturePosition({
-        type: droppedType,
-        x: dropX,
-        y: dropY,
-        containerScale: containerRect.width,
-        pageNumber: currentPageNumber,
-        recipientId: selectedRecipientId
-      });
-
-      console.log('Generated position:', newPosition);
+    if (newPosition) {
       onPositionAdd(newPosition);
-    } catch (error) {
-      console.error('Failed to create position:', error);
-      alert('Failed to create signature position, please try again');
     }
-  };
-
-  // 处理位置点击选择
-  const handlePositionClick = (position: SignaturePositionData) => {
-    onPositionSelect(position);
-  };
-
-  // 处理位置删除
-  const handleDeleteClick = (positionKey: string, event: React.MouseEvent) => {
-    event.stopPropagation();
-    onPositionDelete(positionKey);
-    onPositionSelect(null);
   };
 
   if (!currentFile) {
@@ -150,7 +184,7 @@ const SimplePDFViewer: React.FC<SimplePDFViewerProps> = ({
         <div className="text-center text-gray-500">
           <div className="text-6xl mb-4">📄</div>
           <h3 className="text-lg font-medium mb-2">No File Selected</h3>
-          <p className="text-sm">Please select a PDF file to view</p>
+          <p className="text-sm">Please select a file to view</p>
         </div>
       </div>
     );
@@ -162,7 +196,7 @@ const SimplePDFViewer: React.FC<SimplePDFViewerProps> = ({
         <div className="text-center text-red-500">
           <div className="text-6xl mb-4">❌</div>
           <h3 className="text-lg font-medium mb-2">Invalid File URL</h3>
-          <p className="text-sm">PDF file URL is missing or invalid</p>
+          <p className="text-sm">The PDF file URL is missing or invalid</p>
         </div>
       </div>
     );
@@ -170,13 +204,11 @@ const SimplePDFViewer: React.FC<SimplePDFViewerProps> = ({
 
   return (
     <div className="flex-1 bg-gray-100 flex flex-col">
-      {/* 文件信息头部 */}
+      {/* File info header */}
       <div className="bg-white border-b p-4">
         <div className="flex items-center justify-between max-w-4xl mx-auto">
           <div>
-            <h3 className="font-medium text-gray-900">
-              {currentFile.displayName || currentFile.originalFilename}
-            </h3>
+            <h3 className="font-medium text-gray-900">{currentFile.displayName}</h3>
             <p className="text-sm text-gray-600">
               Page {currentPageNumber} of {totalPages}
             </p>
@@ -187,25 +219,14 @@ const SimplePDFViewer: React.FC<SimplePDFViewerProps> = ({
         </div>
       </div>
 
-      {/* PDF显示区域 */}
+      {/* PDF display area */}
       <div className="flex-1 overflow-auto">
         <div className="max-w-4xl mx-auto py-8">
           <div 
-            className={`bg-white rounded-lg shadow-sm overflow-hidden transition-all relative ${
-              isDragOver ? 'ring-4 ring-blue-300 ring-opacity-50 shadow-lg scale-[1.02]' : ''
+            className={`bg-white rounded-lg shadow-sm overflow-hidden transition-all ${
+              isDragOver ? 'ring-2 ring-blue-300 ring-opacity-50 shadow-lg' : ''
             }`}
           >
-            {/* 拖拽提示覆盖层 */}
-            {isDragOver && (
-              <div className="absolute inset-0 bg-blue-50 bg-opacity-90 flex items-center justify-center z-10 border-2 border-dashed border-blue-400">
-                <div className="text-center">
-                  <div className="text-4xl mb-2">📍</div>
-                  <div className="text-lg font-semibold text-blue-600">Drop signature control here</div>
-                  <div className="text-sm text-blue-500">Release mouse to place</div>
-                </div>
-              </div>
-            )}
-
             <div 
               ref={pdfContainerRef}
               data-pdf-container
@@ -214,16 +235,25 @@ const SimplePDFViewer: React.FC<SimplePDFViewerProps> = ({
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
             >
-              {/* PDF内容 */}
+              {/* PDF content using embed */}
               <embed
                 ref={embedRef}
-                src={`${currentFile.supabaseUrl}#page=${currentPageNumber}&toolbar=0&navpanes=0&scrollbar=0&view=FitH`}
+                src={`${currentFile.supabaseUrl}#page=${currentPageNumber}&toolbar=0&navpanes=0&scrollbar=0`}
                 type="application/pdf"
                 className="w-full h-full min-h-[800px] pointer-events-none"
-                title={currentFile.displayName || currentFile.originalFilename}
+                title={currentFile.displayName}
+                onLoad={() => {
+                  setLoading(false);
+                  setError(null);
+                  // Page count is now loaded dynamically in useEffect
+                }}
+                onError={() => {
+                  setLoading(false);
+                  setError('Failed to load PDF');
+                }}
               />
 
-              {/* 签名位置覆盖层 */}
+              {/* Signature positions overlay */}
               <div className="absolute inset-0 pointer-events-none">
                 {currentPagePositions.map(position => {
                   const isSelected = selectedPosition?.key === position.key;
@@ -232,49 +262,44 @@ const SimplePDFViewer: React.FC<SimplePDFViewerProps> = ({
                   return (
                     <div
                       key={position.key}
-                      className={`absolute border-2 bg-opacity-70 cursor-pointer transition-all pointer-events-auto ${
+                      className={`absolute border-2 bg-blue-50 bg-opacity-70 cursor-pointer transition-all pointer-events-auto ${
                         isSelected
-                          ? 'border-blue-500 bg-blue-100 shadow-lg ring-2 ring-blue-300'
-                          : 'border-blue-300 bg-blue-50 hover:border-blue-400 hover:shadow-md hover:bg-blue-100'
+                          ? 'border-blue-500 shadow-lg ring-2 ring-blue-300'
+                          : 'border-blue-300 hover:border-blue-400 hover:shadow-md'
                       }`}
                       style={{
-                        left: `${Math.max(0, pixelPos.x)}px`,
-                        top: `${Math.max(0, pixelPos.y)}px`,
-                        width: `${Math.max(60, pixelPos.width)}px`,
-                        height: `${Math.max(30, pixelPos.height)}px`,
+                        left: `${pixelPos.x}px`,
+                        top: `${pixelPos.y}px`,
+                        width: `${pixelPos.width}px`,
+                        height: `${pixelPos.height}px`,
                         zIndex: position.zIndex || 1
                       }}
-                      onClick={() => handlePositionClick(position)}
+                      onClick={() => onPositionSelect(position)}
                     >
-                      {/* 内容显示 */}
-                      <div className="flex items-center justify-center h-full text-xs text-blue-600 font-medium px-1 truncate">
-                        {position.options?.placeholder || getPlaceholderText(position.type)}
+                      <div className="flex items-center justify-center h-full text-xs text-blue-600 font-medium px-1">
+                        {position.options?.placeholder || position.type}
                       </div>
                       
-                      {/* 选中状态的操作按钮 */}
+                      {/* Delete button for selected position */}
+                      {isSelected && (
+                        <button
+                          className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full text-xs hover:bg-red-600 flex items-center justify-center"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onPositionDelete(position.key);
+                          }}
+                        >
+                          ×
+                        </button>
+                      )}
+
+                      {/* Resize handles for selected position */}
                       {isSelected && (
                         <>
-                          {/* 删除按钮 */}
-                          <button
-                            className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full text-xs hover:bg-red-600 flex items-center justify-center transition-colors"
-                            onClick={(e) => handleDeleteClick(position.key, e)}
-                            title="Delete signature position"
-                          >
-                            ×
-                          </button>
-
-                          {/* 调整大小手柄 */}
                           <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-blue-500 rounded-full cursor-se-resize" />
                           <div className="absolute -top-1 -right-1 w-3 h-3 bg-blue-500 rounded-full cursor-ne-resize" />
                         </>
                       )}
-
-                      {/* 位置类型指示器 */}
-                      <div className="absolute -top-1 -left-1 text-xs bg-blue-500 text-white px-1 rounded text-[10px]">
-                        {position.type === 'signature' ? '签' : 
-                         position.type === 'date' ? '日' : 
-                         position.type === 'text' ? '文' : '控'}
-                      </div>
                     </div>
                   );
                 })}
@@ -282,7 +307,7 @@ const SimplePDFViewer: React.FC<SimplePDFViewerProps> = ({
             </div>
           </div>
 
-          {/* 分页控件 */}
+          {/* Enhanced Pagination */}
           <PDFPagination
             currentPage={currentPageNumber}
             totalPages={totalPages}
@@ -294,4 +319,4 @@ const SimplePDFViewer: React.FC<SimplePDFViewerProps> = ({
   );
 };
 
-export default SimplePDFViewer;
+export default EnhancedPDFViewer;

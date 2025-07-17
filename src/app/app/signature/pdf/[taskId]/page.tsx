@@ -7,7 +7,16 @@ import { ArrowLeft, Save, Send } from 'lucide-react';
 import dynamic from 'next/dynamic';
 
 // Import components
-import TopBar from '../components/topbar';
+import { 
+  TopBar
+} from '../components';
+import SimplePDFViewer from '../components/simple-pdf-viewer';
+import { DragWidgetsGroup } from '../components/simple-drag-widgets';
+import { 
+  convertToComponentPosition, 
+  convertToApiPosition,
+  convertToComponentPositions 
+} from '@/lib/utils/coordinates-enhanced';
 
 // Import API services
 import {
@@ -18,19 +27,10 @@ import {
   getRecipientPositions,
   CreatePositionRequest
 } from '@/lib/api/signature-positions';
+import { SignaturePositionData, RecipientInfo } from '@/lib/types/signature';
 
 // Use the new PDF viewer canvas
-const PDFViewer = dynamic(() => import('../components/pdf-viewer-canvas'), {
-  ssr: false,
-  loading: () => (
-    <div className="flex-1 bg-white flex items-center justify-center">
-      <div className="text-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600 mx-auto mb-4"></div>
-        <p className="text-gray-600">Loading PDF Viewer...</p>
-      </div>
-    </div>
-  )
-});
+
 
 // Type definitions
 interface TaskInfo {
@@ -59,15 +59,6 @@ interface FileInfo {
   uploaded_at?: string;
 }
 
-interface RecipientInfo {
-  id: string;
-  name: string;
-  email: string;
-  status: string;
-  token: string;
-  expires_at: string;
-}
-
 export default function PDFSignaturePage() {
   const params = useParams();
   const router = useRouter();
@@ -92,6 +83,34 @@ export default function PDFSignaturePage() {
   // Load task data
   useEffect(() => {
     loadTaskData();
+  }, [taskId]);
+
+  // 加载收件人数据
+  useEffect(() => {
+    const loadRecipients = async () => {
+      try {
+        const response = await fetch(`/api/signature/tasks/${taskId}/recipients`);
+        const data = await response.json();
+        if (data.success && Array.isArray(data.data)) {
+          // 转换API返回的数据为RecipientInfo类型
+          const formattedRecipients: RecipientInfo[] = data.data.map((recipient: any) => ({
+            id: recipient.id,
+            name: recipient.name,
+            email: recipient.email,
+            role: recipient.role || 'signer', // 默认角色
+            status: recipient.status || 'pending' // 默认状态
+          }));
+          setRecipients(formattedRecipients);
+          if (formattedRecipients.length > 0) {
+            setSelectedRecipientId(formattedRecipients[0].id);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load recipients:', error);
+      }
+    };
+    
+    loadRecipients();
   }, [taskId]);
 
   // Set default file when files load
@@ -246,14 +265,47 @@ export default function PDFSignaturePage() {
     setSending(true);
     try {
       console.log('Sending emails...');
-      // TODO: Implement email sending logic
-      setTimeout(() => {
-        alert('Emails sent successfully');
+      
+      // 验证是否有收件人和签字位置
+      if (recipients.length === 0) {
+        alert('Please add recipients first');
         setSending(false);
-      }, 2000);
+        return;
+      }
+
+      if (signaturePositions.length === 0) {
+        alert('Please add signature positions first');
+        setSending(false);
+        return;
+      }
+
+      // 调用发布API
+      const response = await fetch(`/api/signature/tasks/${taskId}/publish`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to send emails');
+      }
+
+      const result = await response.json();
+      console.log('Email sending result:', result);
+
+      if (result.success) {
+        alert('Emails sent successfully! Recipients will receive signature invitations.');
+        // 重新加载任务数据以获取最新状态
+        await loadTaskData();
+      } else {
+        throw new Error(result.error || 'Failed to send emails');
+      }
     } catch (error) {
       console.error('Failed to send emails:', error);
-      alert('Failed to send emails');
+      alert(`Failed to send emails: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
       setSending(false);
     }
   };
@@ -422,9 +474,7 @@ export default function PDFSignaturePage() {
   // Drag handling
   const [draggedItem, setDraggedItem] = useState<string | null>(null);
 
-  const handleDragStart = (event: React.DragEvent, itemType: string) => {
-    event.dataTransfer.setData('text/plain', itemType);
-    event.dataTransfer.effectAllowed = 'copy';
+  const handleDragStart = (itemType: string) => {
     setDraggedItem(itemType);
   };
 
@@ -474,8 +524,6 @@ export default function PDFSignaturePage() {
       <div className="flex h-[calc(100vh-64px)]">
         {/* Left sidebar: Drag controls toolbar */}
         <div className="w-64 bg-white border-r border-gray-200 p-4">
-          <h3 className="text-sm font-medium text-gray-900 mb-3">Signature Controls</h3>
-          
           {/* Save status indicator */}
           {(saving || savingPosition) && (
             <div className="mb-3 p-2 bg-blue-50 border border-blue-200 rounded text-xs text-blue-700">
@@ -496,32 +544,11 @@ export default function PDFSignaturePage() {
             </div>
           )}
 
-          <div className="space-y-2">
-            <div 
-              draggable
-              onDragStart={(e) => handleDragStart(e, 'signature')}
-              onDragEnd={handleDragEnd}
-              className="p-3 bg-blue-50 border border-blue-200 rounded text-xs text-blue-700 cursor-move hover:bg-blue-100 transition-colors"
-            >
-              ✍️ Signature (Drag to PDF)
-            </div>
-            <div 
-              draggable
-              onDragStart={(e) => handleDragStart(e, 'date')}
-              onDragEnd={handleDragEnd}
-              className="p-3 bg-green-50 border border-green-200 rounded text-xs text-green-700 cursor-move hover:bg-green-100 transition-colors"
-            >
-              📅 Date (Drag to PDF)
-            </div>
-            <div 
-              draggable
-              onDragStart={(e) => handleDragStart(e, 'text')}
-              onDragEnd={handleDragEnd}
-              className="p-3 bg-yellow-50 border border-yellow-200 rounded text-xs text-yellow-700 cursor-move hover:bg-yellow-100 transition-colors"
-            >
-              📝 Text (Drag to PDF)
-            </div>
-          </div>
+          {/* 使用新的拖拽组件 */}
+          <DragWidgetsGroup
+            onDragStart={handleDragStart}
+            onDragEnd={handleDragEnd}
+          />
 
           <h3 className="text-sm font-medium text-gray-900 mb-3 mt-6">Recipients</h3>
           <div className="space-y-2">
@@ -587,18 +614,33 @@ export default function PDFSignaturePage() {
         </div>
 
         {/* Center: PDF display area */}
-        <PDFViewer
+        <SimplePDFViewer
           files={files}
+          recipients={recipients}
           currentFileId={currentFileId}
           currentPageNumber={currentPageNumber}
-          positions={signaturePositions.filter(p => p.fileId === currentFileId)}
-          selectedPosition={selectedPosition}
-          onPositionSelect={handlePositionSelect}
-          onPositionUpdate={handlePositionUpdate}
+          positions={convertToComponentPositions(signaturePositions.filter(p => p.fileId === currentFileId))}
+          selectedPosition={selectedPosition ? convertToComponentPosition(selectedPosition) : null}
+          selectedRecipientId={selectedRecipientId}
+          draggedWidgetType={draggedItem}
+          onPositionSelect={(position) => {
+            if (position) {
+              const apiPosition = convertToApiPosition({...position});
+              handlePositionSelect({...apiPosition, fileId: currentFileId});
+            } else {
+              handlePositionSelect(null);
+            }
+          }}
+          onPositionUpdate={(position) => {
+            const apiPosition = convertToApiPosition({...position});
+            handlePositionUpdate({...apiPosition, fileId: currentFileId});
+          }}
           onPositionDelete={handlePositionDelete}
-          onPositionAdd={handlePositionAdd}
+          onPositionAdd={(position) => {
+            const apiPosition = convertToApiPosition({...position});
+            handlePositionAdd({...apiPosition, fileId: currentFileId});
+          }}
           onPageChange={handlePageChange}
-          draggedItem={draggedItem}
         />
 
         {/* Right sidebar: Properties panel */}
