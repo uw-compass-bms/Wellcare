@@ -2,269 +2,268 @@
 
 import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { useAuth } from '@clerk/nextjs';
-import dynamic from 'next/dynamic';
+import { ProductionSignatureCanvas } from '../components/ProductionSignatureCanvas';
+import { Button } from '@/components/ui/button';
+import { ArrowLeft, Send, Save } from 'lucide-react';
+import { Toast } from '@/lib/utils/toast';
 
-// Dynamic import to avoid SSR issues
-const PDFSignatureLayout = dynamic(
-  () => import('../components').then(mod => ({ default: mod.PDFSignatureLayout })),
-  { 
-    ssr: false,
-    loading: () => (
-      <div className="flex items-center justify-center h-screen">
-        <div className="text-gray-500">Loading PDF signature editor...</div>
-      </div>
-    )
-  }
-);
-
-const DemoMode = dynamic(
-  () => import('./demo-mode'),
-  { 
-    ssr: false,
-    loading: () => (
-      <div className="flex items-center justify-center h-screen">
-        <div className="text-gray-500">Loading demo...</div>
-      </div>
-    )
-  }
-);
-
-// Types
-interface Task {
+interface TaskData {
   id: string;
   title: string;
+  description?: string;
   status: string;
+  files: Array<{
+    id: string;
+    originalFilename: string;
+    displayName: string;
+    supabaseUrl: string;
+  }>;
+  recipients: Array<{
+    id: string;
+    name: string;
+    email: string;
+  }>;
 }
 
-interface FileInfo {
-  id: string;
-  displayName: string;
-  originalFilename: string;
-  supabaseUrl: string;
-}
-
-interface RecipientInfo {
-  id: string;
-  name: string;
-  email: string;
-  status: string;
-}
-
-interface Widget {
-  id: string;
-  type: string;
-  page: number;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  value: string;
-  placeholder: string;
-  recipientId: string;
-}
-
-export default function PDFSignaturePage() {
+export default function SignatureSetupPage() {
   const params = useParams();
   const router = useRouter();
-  const { isLoaded, isSignedIn, getToken } = useAuth();
-  
   const taskId = params.taskId as string;
 
-  // State
+  const [taskData, setTaskData] = useState<TaskData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [task, setTask] = useState<Task | null>(null);
-  const [files, setFiles] = useState<FileInfo[]>([]);
-  const [recipients, setRecipients] = useState<RecipientInfo[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [publishing, setPublishing] = useState(false);
+  const [currentFileIndex, setCurrentFileIndex] = useState(0);
+  const [currentRecipientIndex, setCurrentRecipientIndex] = useState(0);
 
-  // Get auth headers
-  const getAuthHeaders = async () => {
-    const token = await getToken();
-    return {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json'
-    };
-  };
-
-  // Load task data
   useEffect(() => {
-    if (!isLoaded || !isSignedIn) return;
-    loadTaskData();
-  }, [taskId, isLoaded, isSignedIn]);
+    if (taskId) {
+      loadTaskData();
+    }
+  }, [taskId]);
 
   const loadTaskData = async () => {
     try {
-      const headers = await getAuthHeaders();
+      setLoading(true);
       
-      // Load task (包含文件数据)
-      console.log('Loading task:', taskId);
-      const taskRes = await fetch(`/api/signature/tasks/${taskId}`, { headers });
-      if (!taskRes.ok) {
-        const errorData = await taskRes.text();
-        console.error('Task load failed:', errorData);
-        throw new Error('Failed to load task');
+      const [taskResponse, recipientsResponse] = await Promise.all([
+        fetch(`/api/signature/tasks/${taskId}`),
+        fetch(`/api/signature/tasks/${taskId}/recipients`)
+      ]);
+
+      if (!taskResponse.ok || !recipientsResponse.ok) {
+        throw new Error('Failed to load task data');
       }
-      const taskData = await taskRes.json();
-      setTask(taskData.task || taskData);
-      
-      // 处理文件数据 - 转换为前端期望的格式
-      const rawFiles = taskData.files || [];
-      const formattedFiles = rawFiles.map((file: any) => ({
-        id: file.id,
-        displayName: file.display_name || file.original_filename,
-        originalFilename: file.original_filename,
-        supabaseUrl: file.original_file_url || file.file_url,
-        pageCount: file.page_count || 1
+
+      const taskData = await taskResponse.json();
+      const recipientsData = await recipientsResponse.json();
+
+      // Map files to include supabaseUrl field
+      const mappedFiles = (taskData.files || []).map((file: any) => ({
+        ...file,
+        supabaseUrl: file.original_file_url // Map original_file_url to supabaseUrl
       }));
-      setFiles(formattedFiles);
-      console.log('Task and files loaded:', { taskData, formattedFiles });
 
-      // Load recipients
-      console.log('Loading recipients for task:', taskId);
-      const recipientsRes = await fetch(`/api/signature/recipients?taskId=${taskId}`, { headers });
-      if (!recipientsRes.ok) {
-        const errorData = await recipientsRes.text();
-        console.error('Recipients load failed:', errorData);
-        throw new Error('Failed to load recipients');
-      }
-      const recipientsData = await recipientsRes.json();
-      setRecipients(recipientsData.data || []);
-      console.log('Recipients loaded:', recipientsData);
+      setTaskData({
+        ...taskData.task,
+        files: mappedFiles,
+        recipients: recipientsData.data || []
+      });
 
-      setLoading(false);
     } catch (error) {
-      console.error('Error loading task data:', error);
-      setError(error instanceof Error ? error.message : 'Failed to load data');
+      console.error('Error loading task:', error);
+      Toast.error('Failed to load task data');
+    } finally {
       setLoading(false);
     }
   };
 
-  // Handle save
-  const handleSave = async (widgets: Widget[]) => {
+  const handleSaveDraft = async () => {
+    setSaving(true);
     try {
-      const headers = await getAuthHeaders();
+      // Update task status to indicate signatures are configured
+      const response = await fetch(`/api/signature/tasks/${taskId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'signatures_configured' })
+      });
 
-      console.log('Saving widgets:', widgets);
+      if (!response.ok) throw new Error('Failed to save');
+
+      Toast.success('Signature configuration saved');
+    } catch (error) {
+      console.error('Save error:', error);
+      Toast.error('Failed to save configuration');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handlePublish = async () => {
+    setPublishing(true);
+    try {
+      // Check if all recipients have at least one signature field
+      const positionsResponse = await fetch(`/api/signature/positions?taskId=${taskId}`);
+      if (!positionsResponse.ok) throw new Error('Failed to check positions');
       
-      // 如果没有widgets，就跳过保存
-      if (!widgets || widgets.length === 0) {
-        console.log('No widgets to save');
+      const positions = await positionsResponse.json();
+      const hasAllRecipientFields = taskData?.recipients.every(recipient =>
+        positions.data.some((pos: any) => pos.recipient_id === recipient.id)
+      );
+
+      if (!hasAllRecipientFields) {
+        Toast.warning('Please add signature fields for all recipients');
         return;
       }
 
-      // 确保我们有文件ID
-      if (!files || files.length === 0) {
-        throw new Error('No files available for saving positions');
-      }
-
-      // Convert widgets to API format and save each position
-      for (const widget of widgets) {
-        const position = {
-          recipientId: widget.recipientId,
-          fileId: files[0].id, // Use first file
-          pageNumber: widget.page,
-          x: widget.x,
-          y: widget.y,
-          width: widget.width,
-          height: widget.height,
-          placeholderText: widget.placeholder
-        };
-
-        console.log('Saving position:', position);
-
-        const response = await fetch('/api/signature/positions', {
-          method: 'POST',
-          headers,
-          body: JSON.stringify(position)
-        });
-
-        if (!response.ok) {
-          const error = await response.json();
-          console.error('Position save failed:', error);
-          throw new Error(error.error || 'Failed to save position');
-        } else {
-          const result = await response.json();
-          console.log('Position saved successfully:', result);
-        }
-      }
-
-      // Update task modified time
-      const updateResponse = await fetch(`/api/signature/tasks/${taskId}/update-modified`, {
-        method: 'PUT',
-        headers
-      });
-
-      if (!updateResponse.ok) {
-        console.warn('Failed to update task modified time');
-      }
-
-      console.log('All positions saved successfully');
-
-    } catch (error) {
-      console.error('Error saving positions:', error);
-      throw error;
-    }
-  };
-
-  // Handle send
-  const handleSend = async () => {
-    if (recipients.length === 0) {
-      alert('Please add recipients first');
-      return;
-    }
-
-    try {
-      const headers = await getAuthHeaders();
-      const response = await fetch('/api/signature/email/send', {
+      // Publish the task
+      const publishResponse = await fetch(`/api/signature/tasks/${taskId}/publish`, {
         method: 'POST',
-        headers,
-        body: JSON.stringify({ taskId })
       });
 
-      const result = await response.json();
-      if (result.success) {
-        alert(`Emails sent successfully to ${result.sentCount} recipients!`);
-      } else {
-        alert(`Failed to send emails: ${result.error}`);
-      }
+      if (!publishResponse.ok) throw new Error('Failed to publish');
+
+      Toast.success('Task published and emails sent to recipients');
+
+      // Navigate back to task list
+      router.push('/app/signature');
     } catch (error) {
-      console.error('Error sending emails:', error);
-      alert('Failed to send emails');
+      console.error('Publish error:', error);
+      Toast.error('Failed to publish task');
+    } finally {
+      setPublishing(false);
     }
   };
 
-  if (!isLoaded || loading) {
+  if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen">
+      <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
-          <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <div className="text-gray-600">Loading PDF signature editor...</div>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading signature setup...</p>
         </div>
       </div>
     );
   }
 
-  if (!isSignedIn) {
+  if (!taskData || taskData.files.length === 0 || taskData.recipients.length === 0) {
     return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="text-gray-500">Please sign in to continue</div>
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-xl font-semibold mb-4">Invalid Task Configuration</h2>
+          <p className="text-gray-600 mb-4">This task needs files and recipients before setting up signatures.</p>
+          <Button onClick={() => router.push(`/app/signature/create-task/${taskId}`)}>
+            Go Back to Configuration
+          </Button>
+        </div>
       </div>
     );
   }
 
-  // 如果有错误或者没有数据，显示演示模式
-  if (error || (!files.length && !recipients.length && !loading)) {
-    return <DemoMode taskId={taskId} />;
-  }
+  const currentFile = taskData.files[currentFileIndex];
+  const currentRecipient = taskData.recipients[currentRecipientIndex];
+
+  // Debug log
+  console.log('Task data:', taskData);
+  console.log('Current file:', currentFile);
+  console.log('File URL:', currentFile?.supabaseUrl);
+  console.log('Original file URL:', currentFile?.original_file_url);
 
   return (
-    <PDFSignatureLayout
-      taskId={taskId}
-      files={files}
-      recipients={recipients}
-      onSave={handleSave}
-      onSend={handleSend}
-    />
+    <div className="h-screen flex flex-col">
+      {/* Header */}
+      <div className="bg-white border-b border-gray-200 px-4 py-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => router.push(`/app/signature/create-task/${taskId}`)}
+              className="mr-4"
+            >
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              Back
+            </Button>
+            <div>
+              <h1 className="text-lg font-semibold">{taskData.title}</h1>
+              <p className="text-sm text-gray-600">
+                Setting up signatures • File {currentFileIndex + 1} of {taskData.files.length}
+                {' • '}Recipient: {currentRecipient.name}
+              </p>
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-3">
+            {/* File navigation */}
+            {taskData.files.length > 1 && (
+              <div className="flex items-center gap-2 mr-4">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setCurrentFileIndex(Math.max(0, currentFileIndex - 1))}
+                  disabled={currentFileIndex === 0}
+                >
+                  Previous File
+                </Button>
+                <span className="text-sm text-gray-600">
+                  {currentFileIndex + 1} / {taskData.files.length}
+                </span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setCurrentFileIndex(Math.min(taskData.files.length - 1, currentFileIndex + 1))}
+                  disabled={currentFileIndex === taskData.files.length - 1}
+                >
+                  Next File
+                </Button>
+              </div>
+            )}
+
+            {/* Recipient selector */}
+            <select
+              value={currentRecipientIndex}
+              onChange={(e) => setCurrentRecipientIndex(parseInt(e.target.value))}
+              className="px-3 py-1.5 border rounded-md text-sm"
+            >
+              {taskData.recipients.map((recipient, index) => (
+                <option key={recipient.id} value={index}>
+                  {recipient.name} ({recipient.email})
+                </option>
+              ))}
+            </select>
+
+            <Button
+              variant="outline"
+              onClick={handleSaveDraft}
+              disabled={saving}
+            >
+              <Save className="w-4 h-4 mr-2" />
+              {saving ? 'Saving...' : 'Save'}
+            </Button>
+            
+            <Button
+              onClick={handlePublish}
+              disabled={publishing}
+              className="bg-teal-600 hover:bg-teal-700 text-white"
+            >
+              <Send className="w-4 h-4 mr-2" />
+              {publishing ? 'Publishing...' : 'Publish & Send'}
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* Main content */}
+      <div className="flex-1 overflow-hidden">
+        <ProductionSignatureCanvas
+          key={`${currentFile.id}-${currentRecipient.id}`}
+          taskId={taskId}
+          fileUrl={currentFile.supabaseUrl}
+          fileId={currentFile.id}
+          recipientId={currentRecipient.id}
+        />
+      </div>
+    </div>
   );
 }
