@@ -97,7 +97,7 @@ export default function PDFSignaturePage() {
     try {
       const headers = await getAuthHeaders();
       
-      // Load task
+      // Load task (包含文件数据)
       console.log('Loading task:', taskId);
       const taskRes = await fetch(`/api/signature/tasks/${taskId}`, { headers });
       if (!taskRes.ok) {
@@ -107,19 +107,18 @@ export default function PDFSignaturePage() {
       }
       const taskData = await taskRes.json();
       setTask(taskData.task || taskData);
-      console.log('Task loaded:', taskData);
-
-      // Load files
-      console.log('Loading files for task:', taskId);
-      const filesRes = await fetch(`/api/signature/files?taskId=${taskId}`, { headers });
-      if (!filesRes.ok) {
-        const errorData = await filesRes.text();
-        console.error('Files load failed:', errorData);
-        throw new Error('Failed to load files');
-      }
-      const filesData = await filesRes.json();
-      setFiles(filesData.data || []);
-      console.log('Files loaded:', filesData);
+      
+      // 处理文件数据 - 转换为前端期望的格式
+      const rawFiles = taskData.files || [];
+      const formattedFiles = rawFiles.map((file: any) => ({
+        id: file.id,
+        displayName: file.display_name || file.original_filename,
+        originalFilename: file.original_filename,
+        supabaseUrl: file.original_file_url || file.file_url,
+        pageCount: file.page_count || 1
+      }));
+      setFiles(formattedFiles);
+      console.log('Task and files loaded:', { taskData, formattedFiles });
 
       // Load recipients
       console.log('Loading recipients for task:', taskId);
@@ -146,11 +145,24 @@ export default function PDFSignaturePage() {
     try {
       const headers = await getAuthHeaders();
 
+      console.log('Saving widgets:', widgets);
+      
+      // 如果没有widgets，就跳过保存
+      if (!widgets || widgets.length === 0) {
+        console.log('No widgets to save');
+        return;
+      }
+
+      // 确保我们有文件ID
+      if (!files || files.length === 0) {
+        throw new Error('No files available for saving positions');
+      }
+
       // Convert widgets to API format and save each position
       for (const widget of widgets) {
         const position = {
           recipientId: widget.recipientId,
-          fileId: files[0]?.id, // Use first file for now
+          fileId: files[0].id, // Use first file
           pageNumber: widget.page,
           x: widget.x,
           y: widget.y,
@@ -158,6 +170,8 @@ export default function PDFSignaturePage() {
           height: widget.height,
           placeholderText: widget.placeholder
         };
+
+        console.log('Saving position:', position);
 
         const response = await fetch('/api/signature/positions', {
           method: 'POST',
@@ -167,15 +181,25 @@ export default function PDFSignaturePage() {
 
         if (!response.ok) {
           const error = await response.json();
+          console.error('Position save failed:', error);
           throw new Error(error.error || 'Failed to save position');
+        } else {
+          const result = await response.json();
+          console.log('Position saved successfully:', result);
         }
       }
 
       // Update task modified time
-      await fetch(`/api/signature/tasks/${taskId}/update-modified`, {
+      const updateResponse = await fetch(`/api/signature/tasks/${taskId}/update-modified`, {
         method: 'PUT',
         headers
       });
+
+      if (!updateResponse.ok) {
+        console.warn('Failed to update task modified time');
+      }
+
+      console.log('All positions saved successfully');
 
     } catch (error) {
       console.error('Error saving positions:', error);

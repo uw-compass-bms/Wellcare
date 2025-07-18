@@ -9,6 +9,7 @@ export { default as PDFHeader } from './layout/PDFHeader';
 // PDF渲染组件
 export { default as PDFRenderer } from './pdf/PDFRenderer';
 export { default as PDFPage } from './pdf/PDFPage';
+export { default as ReactPDFPage } from './pdf/ReactPDFPage';
 export { default as PDFNavigation } from './pdf/PDFNavigation';
 export { default as PDFZoomControls } from './pdf/PDFZoomControls';
 

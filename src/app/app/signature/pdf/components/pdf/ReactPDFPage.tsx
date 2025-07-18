@@ -1,11 +1,15 @@
 'use client';
 
 import React, { useRef, useEffect, useState } from 'react';
+import { Document, Page, pdfjs } from 'react-pdf';
 import PlacedWidget from '../widgets/PlacedWidget';
 import { Widget, RecipientInfo, WidgetType } from '../../types';
 import { getWidgetTemplate } from '../widgets/widget-templates';
 
-interface PDFPageProps {
+// 设置PDF.js worker
+pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
+
+interface ReactPDFPageProps {
   fileUrl: string;
   pageNumber: number;
   scale: number;
@@ -17,10 +21,11 @@ interface PDFPageProps {
   onWidgetUpdate: (widgetId: string, updates: Partial<Widget>) => void;
   onWidgetDelete: (widgetId: string) => void;
   onWidgetDrop: (position: { x: number; y: number }, type: WidgetType) => void;
+  onPageLoadSuccess?: (pageInfo: { width: number; height: number }) => void;
   readOnly?: boolean;
 }
 
-const PDFPage: React.FC<PDFPageProps> = ({
+const ReactPDFPage: React.FC<ReactPDFPageProps> = ({
   fileUrl,
   pageNumber,
   scale,
@@ -32,38 +37,36 @@ const PDFPage: React.FC<PDFPageProps> = ({
   onWidgetUpdate,
   onWidgetDelete,
   onWidgetDrop,
+  onPageLoadSuccess,
   readOnly = false
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerDimensions, setContainerDimensions] = useState({ width: 0, height: 0 });
   const [draggedType, setDraggedType] = useState<WidgetType | null>(null);
+  const [numPages, setNumPages] = useState<number>(0);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // 更新容器尺寸
-  useEffect(() => {
-    const updateDimensions = () => {
-      if (containerRef.current) {
-        const rect = containerRef.current.getBoundingClientRect();
-        setContainerDimensions({
-          width: rect.width,
-          height: rect.height
-        });
-      }
-    };
+  // 处理文档加载成功
+  const onDocumentLoadSuccess = ({ numPages }: { numPages: number }) => {
+    setNumPages(numPages);
+    setIsLoading(false);
+    setError(null);
+  };
 
-    updateDimensions();
-    window.addEventListener('resize', updateDimensions);
-    
-    // 监听容器大小变化
-    const observer = new ResizeObserver(updateDimensions);
-    if (containerRef.current) {
-      observer.observe(containerRef.current);
-    }
+  // 处理页面加载成功
+  const onPageLoadSuccessHandler = (page: any) => {
+    const { width, height } = page;
+    setContainerDimensions({ width, height });
+    onPageLoadSuccess?.({ width, height });
+  };
 
-    return () => {
-      window.removeEventListener('resize', updateDimensions);
-      observer.disconnect();
-    };
-  }, []);
+  // 处理加载错误
+  const onDocumentLoadError = (error: any) => {
+    console.error('PDF load error:', error);
+    setError('Failed to load PDF. The file might be corrupted or inaccessible.');
+    setIsLoading(false);
+  };
 
   // 处理拖拽进入
   const handleDragOver = (e: React.DragEvent) => {
@@ -82,7 +85,6 @@ const PDFPage: React.FC<PDFPageProps> = ({
 
   // 处理拖拽离开容器
   const handleDragLeave = (e: React.DragEvent) => {
-    // 只有当离开整个容器时才清除拖拽状态
     if (!containerRef.current?.contains(e.relatedTarget as Node)) {
       setDraggedType(null);
     }
@@ -104,7 +106,6 @@ const PDFPage: React.FC<PDFPageProps> = ({
 
     const template = getWidgetTemplate(type);
     
-    // 确保widget不会超出边界
     const finalX = Math.max(0, Math.min(100 - template.defaultSize.width, x));
     const finalY = Math.max(0, Math.min(100 - template.defaultSize.height, y));
 
@@ -121,26 +122,60 @@ const PDFPage: React.FC<PDFPageProps> = ({
     }
   };
 
+  if (error) {
+    return (
+      <div className="relative bg-white shadow-lg mx-auto flex items-center justify-center" 
+           style={{ width: '210mm', aspectRatio: '210/297' }}>
+        <div className="text-center p-8">
+          <div className="text-red-600 text-lg font-semibold mb-2">PDF Load Error</div>
+          <div className="text-gray-600 text-sm mb-4">{error}</div>
+          <div className="text-xs text-gray-500">URL: {fileUrl}</div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="relative bg-white shadow-lg mx-auto" style={{ width: '210mm', aspectRatio: '210/297' }}>
-      {/* PDF iframe */}
-      <iframe
-        src={`${fileUrl}#page=${pageNumber}&toolbar=0&navpanes=0&scrollbar=0&view=FitH`}
-        className="w-full h-full border-none"
-        style={{ 
-          transform: `scale(${scale})`,
-          transformOrigin: 'top center',
-          pointerEvents: 'none' // 防止干扰拖拽
-        }}
-        onLoad={(e) => {
-          console.log('PDF loaded successfully');
-        }}
-        onError={(e) => {
-          console.error('PDF load error:', e);
-        }}
-        title={`PDF Page ${pageNumber}`}
-        allow="fullscreen"
-      />
+      {/* PDF Document */}
+      <Document
+        file={fileUrl}
+        onLoadSuccess={onDocumentLoadSuccess}
+        onLoadError={onDocumentLoadError}
+        loading={
+          <div className="flex items-center justify-center h-full">
+            <div className="text-center">
+              <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+              <div className="text-gray-600 text-sm">Loading PDF...</div>
+            </div>
+          </div>
+        }
+        error={
+          <div className="flex items-center justify-center h-full">
+            <div className="text-center p-8">
+              <div className="text-red-600 text-lg font-semibold mb-2">Failed to Load PDF</div>
+              <div className="text-gray-600 text-sm mb-4">
+                The PDF file could not be loaded. Please check the file URL or try uploading the file again.
+              </div>
+              <div className="text-xs text-gray-500 break-all">URL: {fileUrl}</div>
+            </div>
+          </div>
+        }
+        noData={
+          <div className="flex items-center justify-center h-full">
+            <div className="text-gray-500 text-sm">No PDF file available</div>
+          </div>
+        }
+      >
+        <Page
+          pageNumber={pageNumber}
+          scale={scale}
+          onLoadSuccess={onPageLoadSuccessHandler}
+          className="mx-auto"
+          renderTextLayer={false}
+          renderAnnotationLayer={false}
+        />
+      </Document>
 
       {/* Widget层 */}
       <div
@@ -151,10 +186,6 @@ const PDFPage: React.FC<PDFPageProps> = ({
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
         onClick={handleContainerClick}
-        style={{
-          transform: `scale(${scale})`,
-          transformOrigin: 'top center'
-        }}
       >
         {/* 拖拽指示器 */}
         {draggedType && (
@@ -174,7 +205,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
               widget={widget}
               recipient={recipient}
               isSelected={selectedWidget === widget.id}
-              scale={1} // 内部缩放由容器处理
+              scale={1}
               containerWidth={containerDimensions.width}
               containerHeight={containerDimensions.height}
               onSelect={() => onWidgetSelect(widget.id)}
@@ -189,4 +220,4 @@ const PDFPage: React.FC<PDFPageProps> = ({
   );
 };
 
-export default PDFPage;
+export default ReactPDFPage;

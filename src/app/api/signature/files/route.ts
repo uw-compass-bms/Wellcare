@@ -169,7 +169,7 @@ export async function GET(request: NextRequest) {
       id: file.id,
       displayName: file.display_name || file.original_filename,
       originalFilename: file.original_filename,
-      supabaseUrl: file.file_url,
+      supabaseUrl: file.original_file_url || file.file_url, // 支持两种字段名
       fileType: file.file_type,
       fileSize: file.file_size,
       pageCount: file.page_count || 1

@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import PDFHeader from './PDFHeader';
 import WidgetPalette from '../widgets/WidgetPalette';
-import PDFPage from '../pdf/PDFPage';
+import ReactPDFPage from '../pdf/ReactPDFPage';
 import PDFNavigation from '../pdf/PDFNavigation';
 import PDFZoomControls from '../pdf/PDFZoomControls';
 import RecipientSelector from '../ui/RecipientSelector';
@@ -158,7 +158,7 @@ const PDFSignatureLayout: React.FC<PDFSignatureProps> = ({
           {/* PDF显示区域 */}
           <div className="flex-1 overflow-auto p-8">
             <div className="flex justify-center">
-              <PDFPage
+              <ReactPDFPage
                 fileUrl={currentFile.supabaseUrl}
                 pageNumber={state.currentPage}
                 scale={state.scale}
@@ -172,6 +172,9 @@ const PDFSignatureLayout: React.FC<PDFSignatureProps> = ({
                 onWidgetDrop={(position, type) => 
                   handleWidgetDrop(position, type, selectedRecipient)
                 }
+                onPageLoadSuccess={(pageInfo) => {
+                  console.log('Page loaded:', pageInfo);
+                }}
                 readOnly={readOnly}
               />
             </div>
