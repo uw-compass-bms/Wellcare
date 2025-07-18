@@ -15,11 +15,31 @@ import { Resend } from 'resend'
 const RESEND_API_KEY = process.env.RESEND_API_KEY
 
 if (!RESEND_API_KEY) {
-  throw new Error('RESEND_API_KEY环境变量未配置')
+  console.error('[Resend Client] RESEND_API_KEY environment variable is not configured')
+  console.error('[Resend Client] Available env vars:', Object.keys(process.env).filter(key => key.includes('RESEND')))
 }
 
-// 创建Resend客户端实例
-export const resend = new Resend(RESEND_API_KEY)
+// 创建Resend客户端实例 - 延迟初始化以处理环境变量加载时序问题
+let resendInstance: Resend | null = null;
+
+export function getResendClient(): Resend {
+  if (!resendInstance) {
+    const apiKey = process.env.RESEND_API_KEY;
+    if (!apiKey) {
+      throw new Error('RESEND_API_KEY环境变量未配置');
+    }
+    resendInstance = new Resend(apiKey);
+  }
+  return resendInstance;
+}
+
+// 导出兼容性接口
+export const resend = new Proxy({} as Resend, {
+  get(target, prop) {
+    const client = getResendClient();
+    return client[prop as keyof Resend];
+  }
+});
 
 // 邮件发送配置
 export const EMAIL_CONFIG = {
@@ -117,7 +137,8 @@ export async function sendEmail(options: EmailSendOptions): Promise<EmailSendRes
     })
 
     // 发送邮件
-    const result = await resend.emails.send(emailData)
+    const client = getResendClient();
+    const result = await client.emails.send(emailData)
 
     if (result.error) {
       console.error('Resend邮件发送失败:', result.error)
@@ -235,7 +256,8 @@ export async function checkResendHealth(): Promise<{
 }> {
   try {
     // 检查API密钥配置
-    if (!RESEND_API_KEY) {
+    const apiKey = process.env.RESEND_API_KEY;
+    if (!apiKey) {
       return {
         healthy: false,
         apiKeyConfigured: false,
@@ -244,7 +266,8 @@ export async function checkResendHealth(): Promise<{
     }
 
     // 尝试获取域名列表（需要有效的API密钥）
-    const domains = await resend.domains.list()
+    const client = getResendClient();
+    const domains = await client.domains.list()
     
     return {
       healthy: !domains.error,
@@ -255,7 +278,7 @@ export async function checkResendHealth(): Promise<{
   } catch (error) {
     return {
       healthy: false,
-      apiKeyConfigured: !!RESEND_API_KEY,
+      apiKeyConfigured: !!process.env.RESEND_API_KEY,
       error: error instanceof Error ? error.message : '健康检查失败'
     }
   }

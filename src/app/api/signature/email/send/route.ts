@@ -231,12 +231,12 @@ export async function POST(request: NextRequest) {
         }
 
         // 构建签字链接
-        const signatureUrl = `${request.nextUrl.origin}/sign?token=${recipient.token}`
+        const signatureUrl = `${request.nextUrl.origin}/sign/${recipient.token}`
 
         // 准备模板变量
         const templateVars: SignatureInviteTemplateVars = {
           recipientName: recipient.name,
-          senderName: authResult.userId!, // 这里应该从用户信息中获取真实姓名
+          senderName: companyName || 'UW Compass用户', // 使用公司名称或默认名称
           documentTitle: task.title,
           signatureUrl: signatureUrl,
           taskId: task.id,
@@ -260,8 +260,18 @@ export async function POST(request: NextRequest) {
         const { template } = templateResult
 
         // 准备邮件发送选项
+        // 注意：在开发模式下，Resend只能发送到注册的邮箱地址
+        const isDevelopment = process.env.NODE_ENV !== 'production';
+        const actualRecipientEmail = isDevelopment && recipient.email !== 'uw.compass.bms@gmail.com' 
+          ? 'uw.compass.bms@gmail.com' // 开发模式下使用测试邮箱
+          : recipient.email;
+          
+        if (isDevelopment && actualRecipientEmail !== recipient.email) {
+          console.log(`[开发模式] 邮件将发送到测试邮箱 ${actualRecipientEmail} 而不是 ${recipient.email}`);
+        }
+        
         const emailOptions: EmailSendOptions = {
-          to: recipient.email,
+          to: actualRecipientEmail,
           subject: template.subject,
           html: template.html,
           text: template.text

@@ -45,7 +45,7 @@ const TopBar: React.FC<TopBarProps> = ({
           className="flex items-center px-4 py-2 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded disabled:opacity-50"
         >
           <Save className="w-4 h-4 mr-2" />
-          {isSaving ? 'Saving...' : 'Save Positions'}
+          {isSaving ? 'Saving...' : 'Save Draft'}
         </button>
         
         <button

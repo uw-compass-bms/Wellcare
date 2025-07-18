@@ -3,7 +3,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { 
   convertDragToSignaturePosition,
-  normalizedToPixelPosition,
   generateUniqueKey,
   getPlaceholderText
 } from '@/lib/utils/coordinates-enhanced';
@@ -13,6 +12,7 @@ import {
   SignaturePositionData 
 } from '@/lib/types/signature';
 import PDFPagination from './pdf-pagination';
+import SignaturePosition from './signature-position';
 
 export interface SimplePDFViewerProps {
   files: FileInfo[];
@@ -27,6 +27,7 @@ export interface SimplePDFViewerProps {
   onPositionDelete: (positionId: string) => void;
   onPositionAdd: (position: Omit<SignaturePositionData, 'key'>) => void;
   onPageChange: (pageNumber: number) => void;
+  onDragEnd?: () => void;
   draggedWidgetType?: string | null;
 }
 
@@ -43,12 +44,11 @@ const SimplePDFViewer: React.FC<SimplePDFViewerProps> = ({
   onPositionDelete,
   onPositionAdd,
   onPageChange,
+  onDragEnd,
   draggedWidgetType
 }) => {
   const [totalPages, setTotalPages] = useState(1);
   const [isDragOver, setIsDragOver] = useState(false);
-  const [containerDimensions, setContainerDimensions] = useState({ width: 800, height: 1132 });
-  
   const pdfContainerRef = useRef<HTMLDivElement>(null);
   const embedRef = useRef<HTMLEmbedElement>(null);
 
@@ -64,47 +64,66 @@ const SimplePDFViewer: React.FC<SimplePDFViewerProps> = ({
     }
   }, [currentFile?.supabaseUrl]);
 
-  // 更新容器尺寸
+  // 确保PDF容器有正确的宽高比
   useEffect(() => {
-    const updateDimensions = () => {
+    const updateAspectRatio = () => {
       if (pdfContainerRef.current) {
-        const rect = pdfContainerRef.current.getBoundingClientRect();
-        setContainerDimensions({
-          width: rect.width || 800,
-          height: rect.height || 1132
-        });
+        const width = pdfContainerRef.current.offsetWidth;
+        // A4 比例: 1:1.414
+        const height = width * 1.414;
+        pdfContainerRef.current.style.height = `${height}px`;
       }
     };
 
-    updateDimensions();
-    window.addEventListener('resize', updateDimensions);
-    return () => window.removeEventListener('resize', updateDimensions);
-  }, []);
+    updateAspectRatio();
+    window.addEventListener('resize', updateAspectRatio);
+    return () => window.removeEventListener('resize', updateAspectRatio);
+  }, [currentFile]);
 
   // 处理拖拽悬停
   const handleDragOver = (event: React.DragEvent) => {
     event.preventDefault();
     event.dataTransfer.dropEffect = 'copy';
-    setIsDragOver(true);
+    
+    console.log('[PDFViewer] handleDragOver, draggedWidgetType:', draggedWidgetType);
+    
+    // 只有在实际拖拽时才显示覆盖层
+    if (!isDragOver) {
+      console.log('[PDFViewer] Setting isDragOver to true');
+      setIsDragOver(true);
+    }
   };
 
   // 处理拖拽离开
   const handleDragLeave = (event: React.DragEvent) => {
-    // 只有当鼠标真正离开容器时才设置为false
-    if (!pdfContainerRef.current?.contains(event.relatedTarget as Node)) {
-      setIsDragOver(false);
+    // 检查是否真的离开了PDF容器
+    const rect = pdfContainerRef.current?.getBoundingClientRect();
+    if (rect) {
+      const { clientX, clientY } = event;
+      if (clientX < rect.left || clientX > rect.right || 
+          clientY < rect.top || clientY > rect.bottom) {
+        setIsDragOver(false);
+      }
     }
   };
 
   // 处理拖拽放置
   const handleDrop = (event: React.DragEvent) => {
     event.preventDefault();
+    event.stopPropagation();
+    console.log('Drop event triggered');
     setIsDragOver(false);
 
     const droppedType = event.dataTransfer.getData('text/plain');
+    console.log('Dropped type:', droppedType);
     
     if (!droppedType || !pdfContainerRef.current || !selectedRecipientId) {
-      console.warn('Drop failed: missing data', { droppedType, selectedRecipientId });
+      console.warn('Drop failed: missing data', { 
+        droppedType, 
+        hasPdfContainer: !!pdfContainerRef.current,
+        selectedRecipientId 
+      });
+      onDragEnd?.(); // 即使失败也要清除拖拽状态
       return;
     }
 
@@ -112,7 +131,16 @@ const SimplePDFViewer: React.FC<SimplePDFViewerProps> = ({
     const dropX = event.clientX - containerRect.left;
     const dropY = event.clientY - containerRect.top;
 
-    console.log('Drop position:', { dropX, dropY, containerWidth: containerRect.width });
+    console.log('Drop details:', { 
+      mouseX: event.clientX,
+      mouseY: event.clientY,
+      containerLeft: containerRect.left,
+      containerTop: containerRect.top,
+      dropX, 
+      dropY, 
+      containerWidth: containerRect.width,
+      containerHeight: containerRect.height
+    });
 
     try {
       const newPosition = convertDragToSignaturePosition({
@@ -126,9 +154,11 @@ const SimplePDFViewer: React.FC<SimplePDFViewerProps> = ({
 
       console.log('Generated position:', newPosition);
       onPositionAdd(newPosition);
+      onDragEnd?.(); // 成功后清除拖拽状态
     } catch (error) {
       console.error('Failed to create position:', error);
       alert('Failed to create signature position, please try again');
+      onDragEnd?.(); // 错误后也要清除拖拽状态
     }
   };
 
@@ -194,90 +224,49 @@ const SimplePDFViewer: React.FC<SimplePDFViewerProps> = ({
             className={`bg-white rounded-lg shadow-sm overflow-hidden transition-all relative ${
               isDragOver ? 'ring-4 ring-blue-300 ring-opacity-50 shadow-lg scale-[1.02]' : ''
             }`}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
           >
             {/* 拖拽提示覆盖层 */}
-            {isDragOver && (
-              <div className="absolute inset-0 bg-blue-50 bg-opacity-90 flex items-center justify-center z-10 border-2 border-dashed border-blue-400">
-                <div className="text-center">
-                  <div className="text-4xl mb-2">📍</div>
-                  <div className="text-lg font-semibold text-blue-600">Drop signature control here</div>
-                  <div className="text-sm text-blue-500">Release mouse to place</div>
-                </div>
+            {isDragOver && draggedWidgetType && (
+              <div className="absolute inset-0 bg-blue-50 bg-opacity-30 border-2 border-dashed border-blue-400 z-10 pointer-events-none">
               </div>
             )}
 
             <div 
               ref={pdfContainerRef}
               data-pdf-container
-              className="relative min-h-[800px]"
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              onDrop={handleDrop}
+              className="relative"
+              style={{ 
+                minHeight: '800px',
+                aspectRatio: '1/1.414' // A4 比例
+              }}
             >
               {/* PDF内容 */}
               <embed
                 ref={embedRef}
                 src={`${currentFile.supabaseUrl}#page=${currentPageNumber}&toolbar=0&navpanes=0&scrollbar=0&view=FitH`}
                 type="application/pdf"
-                className="w-full h-full min-h-[800px] pointer-events-none"
+                className="w-full h-full min-h-[800px]"
+                style={{ pointerEvents: 'none' }}
                 title={currentFile.displayName || currentFile.originalFilename}
               />
 
-              {/* 签名位置覆盖层 */}
-              <div className="absolute inset-0 pointer-events-none">
-                {currentPagePositions.map(position => {
-                  const isSelected = selectedPosition?.key === position.key;
-                  const pixelPos = normalizedToPixelPosition(position, containerDimensions);
+              {/* 拖拽接收层 - 已移到外层容器处理 */}
 
-                  return (
-                    <div
-                      key={position.key}
-                      className={`absolute border-2 bg-opacity-70 cursor-pointer transition-all pointer-events-auto ${
-                        isSelected
-                          ? 'border-blue-500 bg-blue-100 shadow-lg ring-2 ring-blue-300'
-                          : 'border-blue-300 bg-blue-50 hover:border-blue-400 hover:shadow-md hover:bg-blue-100'
-                      }`}
-                      style={{
-                        left: `${Math.max(0, pixelPos.x)}px`,
-                        top: `${Math.max(0, pixelPos.y)}px`,
-                        width: `${Math.max(60, pixelPos.width)}px`,
-                        height: `${Math.max(30, pixelPos.height)}px`,
-                        zIndex: position.zIndex || 1
-                      }}
-                      onClick={() => handlePositionClick(position)}
-                    >
-                      {/* 内容显示 */}
-                      <div className="flex items-center justify-center h-full text-xs text-blue-600 font-medium px-1 truncate">
-                        {position.options?.placeholder || getPlaceholderText(position.type)}
-                      </div>
-                      
-                      {/* 选中状态的操作按钮 */}
-                      {isSelected && (
-                        <>
-                          {/* 删除按钮 */}
-                          <button
-                            className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full text-xs hover:bg-red-600 flex items-center justify-center transition-colors"
-                            onClick={(e) => handleDeleteClick(position.key, e)}
-                            title="Delete signature position"
-                          >
-                            ×
-                          </button>
-
-                          {/* 调整大小手柄 */}
-                          <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-blue-500 rounded-full cursor-se-resize" />
-                          <div className="absolute -top-1 -right-1 w-3 h-3 bg-blue-500 rounded-full cursor-ne-resize" />
-                        </>
-                      )}
-
-                      {/* 位置类型指示器 */}
-                      <div className="absolute -top-1 -left-1 text-xs bg-blue-500 text-white px-1 rounded text-[10px]">
-                        {position.type === 'signature' ? '签' : 
-                         position.type === 'date' ? '日' : 
-                         position.type === 'text' ? '文' : '控'}
-                      </div>
-                    </div>
-                  );
-                })}
+              {/* 签名位置覆盖层 - 使用百分比定位 */}
+              <div className="absolute inset-0" style={{ pointerEvents: 'none', zIndex: 2 }}>
+                {currentPagePositions.map(position => (
+                  <SignaturePosition
+                    key={position.key}
+                    position={position}
+                    isSelected={selectedPosition?.key === position.key}
+                    onClick={() => handlePositionClick(position)}
+                    onDelete={handleDeleteClick}
+                    recipients={recipients}
+                  />
+                ))}
               </div>
             </div>
           </div>

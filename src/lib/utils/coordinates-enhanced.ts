@@ -1,5 +1,19 @@
 import { SignaturePosition as ComponentSignaturePosition, SignaturePositionData } from '@/lib/types/signature';
 import { SignaturePosition as ApiSignaturePosition } from '@/lib/api/signature-positions';
+import {
+  PercentageCoordinates,
+  DragEventData,
+  PageDimensions
+} from '@/lib/types/coordinates';
+import {
+  dragEventToPercentage,
+  percentageToPixel,
+  pixelToPercentage,
+  validatePercentageCoordinates,
+  getDefaultWidgetSize,
+  normalizePercentageCoordinates,
+  getStandardPageDimensions
+} from '@/lib/utils/coordinate-converter';
 
 /**
  * Enhanced coordinate system based on OpenSign implementation
@@ -33,41 +47,51 @@ export function convertDragToSignaturePosition(params: {
 }): Omit<SignaturePositionData, 'key'> {
   const { type, x, y, containerScale, pageNumber, recipientId } = params;
   
-  // 使用固定的页面尺寸 (A4: 595x842 points)
-  const pageWidth = 595;
-  const pageHeight = 842;
+  // 获取标准页面尺寸
+  const pageDimensions = getStandardPageDimensions('A4');
   
-  // 计算实际容器尺寸
-  const containerWidth = containerScale || 800; // 默认800px
-  const containerHeight = (containerWidth * pageHeight) / pageWidth; // 保持A4比例
+  // 计算容器尺寸
+  const containerWidth = containerScale || 800;
+  const containerHeight = (containerWidth * pageDimensions.height) / pageDimensions.width;
   
-  // 计算百分比坐标 (0-100)
-  const xPercent = (x / containerWidth) * 100;
-  const yPercent = (y / containerHeight) * 100;
+  // 创建拖拽事件数据
+  const dragEvent: DragEventData = {
+    mouseX: x,
+    mouseY: y,
+    containerWidth,
+    containerHeight,
+    widgetType: type
+  };
   
-  // 默认尺寸百分比
-  const widthPercent = 15; // 15% of page width
-  const heightPercent = 8;  // 8% of page height
+  // 获取默认尺寸
+  const defaultSize = getDefaultWidgetSize(type);
   
-  // 计算像素尺寸
-  const pixelWidth = (widthPercent / 100) * containerWidth;
-  const pixelHeight = (heightPercent / 100) * containerHeight;
+  // 转换为百分比坐标
+  const percentageCoords = dragEventToPercentage(dragEvent, defaultSize);
   
-  // 验证坐标范围
-  const validXPercent = Math.max(0, Math.min(100 - widthPercent, xPercent));
-  const validYPercent = Math.max(0, Math.min(100 - heightPercent, yPercent));
+  // 验证坐标
+  const validation = validatePercentageCoordinates(percentageCoords);
+  if (!validation.isValid) {
+    console.warn('Invalid coordinates:', validation.errors);
+  }
   
+  // 标准化坐标
+  const normalizedCoords = normalizePercentageCoordinates(percentageCoords);
+  
+  // 返回统一使用百分比的数据结构
   return {
     type,
     pageNumber,
-    xPosition: (validXPercent / 100) * containerWidth,
-    yPosition: (validYPercent / 100) * containerHeight,
-    width: pixelWidth,
-    height: pixelHeight,
-    widthPercent: validXPercent,
-    heightPercent: validYPercent,
-    pageWidth: containerWidth,
-    pageHeight: containerHeight,
+    // 使用百分比值作为主要坐标
+    xPosition: normalizedCoords.x,
+    yPosition: normalizedCoords.y,
+    width: normalizedCoords.width,
+    height: normalizedCoords.height,
+    // 保持兼容性字段
+    widthPercent: normalizedCoords.x,
+    heightPercent: normalizedCoords.y,
+    pageWidth: 100,  // 使用100表示百分比系统
+    pageHeight: 100, // 使用100表示百分比系统
     recipientId,
     scale: 1,
     zIndex: Date.now(),
@@ -208,27 +232,22 @@ export type WidgetType = 'signature' | 'date' | 'text' | 'checkbox' | 'initials'
 
 // 将API类型转换为组件类型
 export function convertToComponentPosition(position: ApiSignaturePosition): SignaturePositionData {
-  // 假设页面尺寸 (A4: 595x842 points)
-  const pageWidth = 595;
-  const pageHeight = 842;
-  
-  // 计算百分比坐标
-  const widthPercent = (position.width / pageWidth) * 100;
-  const heightPercent = (position.height / pageHeight) * 100;
-  
+  // API返回的是百分比坐标，直接使用
   return {
     key: position.id || generateUniqueKey(),
     type: 'signature',
+    // 使用百分比坐标
     xPosition: position.x,
     yPosition: position.y,
     width: position.width,
     height: position.height,
     pageNumber: position.pageNumber,
     recipientId: position.recipientId,
-    widthPercent: widthPercent,
-    heightPercent: heightPercent,
-    pageWidth: pageWidth,
-    pageHeight: pageHeight,
+    // 保持兼容性
+    widthPercent: position.x,
+    heightPercent: position.y,
+    pageWidth: 100,  // 百分比系统
+    pageHeight: 100, // 百分比系统
     scale: 1,
     zIndex: Date.now(),
     options: {
@@ -241,6 +260,7 @@ export function convertToComponentPosition(position: ApiSignaturePosition): Sign
 
 // 将组件类型转换为API类型
 export function convertToApiPosition(position: Omit<SignaturePositionData, 'key'>): Omit<ApiSignaturePosition, 'id'> {
+  // 前端已经使用百分比，直接传递
   return {
     fileId: '', // 需要在使用时填充
     x: position.xPosition,
@@ -248,7 +268,8 @@ export function convertToApiPosition(position: Omit<SignaturePositionData, 'key'
     width: position.width,
     height: position.height,
     pageNumber: position.pageNumber,
-    recipientId: position.recipientId || ''
+    recipientId: position.recipientId || '',
+    placeholderText: position.options?.placeholder || 'Click to sign'
   };
 }
 

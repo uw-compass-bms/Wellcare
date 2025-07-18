@@ -1,12 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { auth } from '@clerk/nextjs/server'
+import { validateAuth } from '@/lib/auth/middleware'
 import { supabase } from '@/lib/supabase/client'
-import { 
-  validateSignaturePosition, 
-  percentageToPixel,
-  percentageSizeToPixel,
-  type SignaturePosition
-} from '@/lib/coordinates'
 
 /**
  * Task 5.2.1: 创建签字位置API
@@ -14,16 +8,24 @@ import {
  */
 export async function POST(request: NextRequest) {
   try {
-    // JWT认证
-    const { userId } = await auth()
-    if (!userId) {
+    console.log('[API] POST /api/signature/positions - Start');
+    
+    // 使用统一的认证中间件
+    const authResult = await validateAuth()
+    if (!authResult.success) {
+      console.error('[API] Auth failed:', authResult.error);
       return NextResponse.json(
-        { error: 'Unauthorized' },
+        { error: 'Unauthorized', message: authResult.error },
         { status: 401 }
       )
     }
+    
+    const userId = authResult.userId!
+    console.log('[API] Auth success, userId:', userId);
 
     const body = await request.json()
+    console.log('[API] Request body:', JSON.stringify(body, null, 2));
+    
     const { 
       recipientId, 
       fileId, 
@@ -36,6 +38,8 @@ export async function POST(request: NextRequest) {
       pageHeight = 842,   // PDF标准页面高度
       placeholderText = 'Click to sign'
     } = body
+
+    console.log('[API] Creating position for recipient:', recipientId);
 
     // 基础验证
     if (!recipientId || !fileId || !pageNumber || 
@@ -88,40 +92,34 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // 创建签字位置对象用于验证
-    const position: SignaturePosition = {
-      x,
-      y,
-      width,
-      height,
-      pageNumber,
-      recipientId
-    }
-
-    // 坐标系统验证
-    const coordinateValidation = validateSignaturePosition(position)
-    if (!coordinateValidation.isValid) {
+    // 简化坐标验证（去掉复杂的坐标系统验证）
+    if (x < 0 || x > 100 || y < 0 || y > 100 || 
+        width <= 0 || width > 100 || height <= 0 || height > 100) {
       return NextResponse.json(
         { 
           error: '坐标验证失败',
-          details: coordinateValidation.errors
+          details: '坐标必须在0-100范围内，尺寸必须大于0'
         },
         { status: 400 }
       )
     }
 
-    // 检查位置冲突（同一文件、同一页面的其他签字位置）
+    // 简化的位置冲突检测 - 只检查完全重叠（90%以上）
+    // 参考OpenSign的做法，允许更灵活的位置放置
     const { data: existingPositions, error: conflictError } = await supabase
       .from('signature_positions')
       .select('id, x_percent, y_percent, width_percent, height_percent, recipient_id')
       .eq('file_id', fileId)
       .eq('page_number', pageNumber)
+      .eq('recipient_id', recipientId)
 
     if (conflictError) {
       throw new Error(`检查位置冲突失败: ${conflictError.message}`)
     }
 
-    // 冲突检测
+    console.log('[API] Existing positions for recipient:', existingPositions?.length || 0);
+
+    // 只检查严重重叠的情况（90%以上重叠）
     for (const existingPos of existingPositions || []) {
       // 计算重叠区域
       const overlapLeft = Math.max(x, existingPos.x_percent)
@@ -135,14 +133,20 @@ export async function POST(request: NextRequest) {
         const currentArea = width * height
         const existingArea = existingPos.width_percent * existingPos.height_percent
         
-        // 如果重叠面积超过任一签字框的20%，则认为冲突
-        const overlapThreshold = 0.20
-        if (overlapArea > currentArea * overlapThreshold || 
+        // 只有当重叠面积超过90%时才认为是冲突
+        const overlapThreshold = 0.90
+        if (overlapArea > currentArea * overlapThreshold && 
             overlapArea > existingArea * overlapThreshold) {
+          console.log('[API] Significant overlap detected:', {
+            overlap: (overlapArea / Math.min(currentArea, existingArea) * 100).toFixed(1) + '%',
+            existingPos: { x: existingPos.x_percent, y: existingPos.y_percent },
+            newPos: { x, y }
+          });
+          
           return NextResponse.json(
             { 
-              error: '签字位置冲突',
-              details: `与现有签字位置重叠过多 (重叠面积: ${(overlapArea / Math.min(currentArea, existingArea) * 100).toFixed(1)}%)`
+              error: '签字位置重复',
+              details: `该位置已存在签字框，请选择其他位置`
             },
             { status: 409 }
           )
@@ -150,15 +154,11 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 转换为像素坐标
-    const pixelPoint = percentageToPixel(
-      { x, y },
-      { width: pageWidth, height: pageHeight, pageNumber }
-    )
-    const pixelSize = percentageSizeToPixel(
-      { width, height },
-      { width: pageWidth, height: pageHeight, pageNumber }
-    )
+    // 简化像素坐标转换
+    const pixelX = Math.round((x / 100) * pageWidth)
+    const pixelY = Math.round((y / 100) * pageHeight)
+    const pixelWidth = Math.round((width / 100) * pageWidth)
+    const pixelHeight = Math.round((height / 100) * pageHeight)
 
     // 创建签字位置记录
     const { data: newPosition, error: insertError } = await supabase
@@ -171,12 +171,12 @@ export async function POST(request: NextRequest) {
         y_percent: y,
         width_percent: width,
         height_percent: height,
-        x_pixel: pixelPoint.x,
-        y_pixel: pixelPoint.y,
-        width_pixel: pixelSize.width,
-        height_pixel: pixelSize.height,
-        page_width: pageWidth,
-        page_height: pageHeight,
+        x_pixel: pixelX,
+        y_pixel: pixelY,
+        width_pixel: pixelWidth,
+        height_pixel: pixelHeight,
+        page_width: Math.round(pageWidth),
+        page_height: Math.round(pageHeight),
         placeholder_text: placeholderText
       })
       .select(`
@@ -233,11 +233,13 @@ export async function POST(request: NextRequest) {
     })
 
   } catch (error) {
-    console.error('创建签字位置错误:', error)
+    console.error('[API] 创建签字位置错误:', error)
+    console.error('[API] Error stack:', error instanceof Error ? error.stack : 'No stack');
     return NextResponse.json(
       { 
         error: '创建签字位置失败',
-        details: error instanceof Error ? error.message : String(error)
+        details: error instanceof Error ? error.message : String(error),
+        message: error instanceof Error ? error.message : '未知错误'
       },
       { status: 500 }
     )

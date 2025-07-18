@@ -20,6 +20,8 @@ export const DragWidget: React.FC<DragWidgetProps> = ({
   onDragEnd
 }) => {
   const handleDragStart = (e: React.DragEvent) => {
+    console.log(`[DragWidget] Starting drag for type: ${type}`);
+    
     // 设置拖拽数据
     e.dataTransfer.setData('text/plain', type);
     e.dataTransfer.effectAllowed = 'copy';
@@ -46,10 +48,12 @@ export const DragWidget: React.FC<DragWidgetProps> = ({
       document.body.removeChild(dragImage);
     }, 0);
     
+    console.log(`[DragWidget] Calling onDragStart callback`);
     onDragStart?.(type);
   };
 
   const handleDragEnd = () => {
+    console.log(`[DragWidget] Drag ended for type: ${type}`);
     onDragEnd?.();
   };
 

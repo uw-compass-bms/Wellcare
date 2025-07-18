@@ -9,10 +9,10 @@ import dynamic from 'next/dynamic';
 
 // Import components
 import { 
-  TopBar
+  TopBar,
+  SimplePDFViewer,
+  DragWidgetsGroup
 } from '../components';
-import SimplePDFViewer from '../components/simple-pdf-viewer';
-import { DragWidgetsGroup } from '../components/simple-drag-widgets';
 import { 
   convertToComponentPosition, 
   convertToApiPosition,
@@ -176,8 +176,29 @@ export default function PDFSignaturePage() {
         
         if (response.ok) {
           const result = await response.json();
-          if (result.success && result.data) {
-            allPositions.push(...result.data);
+          console.log(`Positions API response for ${recipient.name}:`, result);
+          
+          if (result.success && result.data?.filesWithPositions) {
+            // 处理新的API格式
+            result.data.filesWithPositions.forEach((fileData: any) => {
+              fileData.positions.forEach((pos: any) => {
+                const position: SignaturePosition = {
+                  id: pos.id,
+                  recipientId: recipient.id,
+                  fileId: fileData.file.id,
+                  pageNumber: pos.pageNumber,
+                  x: pos.coordinates.percent.x,
+                  y: pos.coordinates.percent.y,
+                  width: pos.coordinates.percent.width,
+                  height: pos.coordinates.percent.height,
+                  placeholderText: pos.placeholderText,
+                  status: pos.status,
+                  signatureContent: pos.signatureContent,
+                  signedAt: pos.signedAt
+                };
+                allPositions.push(position);
+              });
+            });
           }
         } else {
           console.warn(`Failed to load positions for recipient ${recipient.name}`);
@@ -237,61 +258,27 @@ export default function PDFSignaturePage() {
   const handleSavePositions = async () => {
     setSaving(true);
     try {
-      const tempPositions = signaturePositions.filter(p => p.id?.startsWith('temp-'));
+      // Save Draft 应该保存所有位置，包括已经保存的
+      console.log('Saving draft with all positions:', signaturePositions.length);
       
-      if (tempPositions.length === 0) {
-        alert('All positions are already saved');
-        return;
-      }
-
-      console.log('Saving positions...', tempPositions.length);
+      // 更新任务的最后修改时间
+      const headers = await getAuthHeaders();
+      const response = await fetch(`/api/signature/tasks/${taskId}/update-modified`, {
+        method: 'POST',
+        headers
+      });
       
-      let successCount = 0;
-      let errorCount = 0;
-
-      for (const tempPosition of tempPositions) {
-        try {
-          if (!tempPosition.id) continue;
-
-          const createRequest: CreatePositionRequest = {
-            recipientId: tempPosition.recipientId,
-            fileId: tempPosition.fileId,
-            pageNumber: tempPosition.pageNumber,
-            x: tempPosition.x,
-            y: tempPosition.y,
-            width: tempPosition.width,
-            height: tempPosition.height,
-            placeholderText: tempPosition.placeholderText,
-            pageWidth: 800,
-            pageHeight: 600
-          };
-
-          const result = await createSignaturePosition(createRequest);
-          
-          if (result.success && result.data) {
-            setSignaturePositions(prev => 
-              prev.map(p => p.id === tempPosition.id ? result.data! : p)
-            );
-            successCount++;
-          } else {
-            console.error('Failed to save position:', result.error);
-            errorCount++;
-          }
-        } catch (error) {
-          console.error('Error saving position:', error);
-          errorCount++;
-        }
-      }
-
-      if (errorCount === 0) {
-        alert(`Successfully saved ${successCount} signature positions`);
+      if (response.ok) {
+        alert('Draft saved successfully');
       } else {
-        alert(`Save completed: ${successCount} successful, ${errorCount} failed`);
+        const error = await response.json();
+        console.error('Failed to update task:', error);
+        alert('Draft saved, but failed to update task status');
       }
-
+      
     } catch (error) {
-      console.error('Batch save error:', error);
-      alert('Save failed, please try again');
+      console.error('Save draft error:', error);
+      alert('Failed to save draft');
     } finally {
       setSaving(false);
     }
@@ -316,11 +303,10 @@ export default function PDFSignaturePage() {
       }
 
       // 调用发布API
+      const headers = await getAuthHeaders();
       const response = await fetch(`/api/signature/tasks/${taskId}/publish`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: headers,
       });
 
       if (!response.ok) {
@@ -387,13 +373,21 @@ export default function PDFSignaturePage() {
         placeholderText: position.placeholderText
       };
 
-      const result = await updateSignaturePosition(position.id, updates);
+      // 使用认证头直接调用API
+      const headers = await getAuthHeaders();
+      const response = await fetch(`/api/signature/positions/${position.id}`, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify(updates)
+      });
+
+      const result = await response.json();
       
-      if (result.success && result.data) {
+      if (response.ok && result.success) {
         setSignaturePositions(prev => 
-          prev.map(p => p.id === position.id ? result.data! : p)
+          prev.map(p => p.id === position.id ? {...p, ...updates} : p)
         );
-        console.log('Signature position updated successfully:', result.data);
+        console.log('Signature position updated successfully');
       } else {
         console.error('Failed to update signature position:', result.error);
         alert(`Update failed: ${result.error}`);
@@ -413,9 +407,16 @@ export default function PDFSignaturePage() {
     }
 
     try {
-      const result = await deleteSignaturePosition(positionId);
+      // 使用认证头直接调用API
+      const headers = await getAuthHeaders();
+      const response = await fetch(`/api/signature/positions/${positionId}`, {
+        method: 'DELETE',
+        headers
+      });
+
+      const result = await response.json();
       
-      if (result.success) {
+      if (response.ok && result.success) {
         setSignaturePositions(prev => prev.filter(p => p.id !== positionId));
         setSelectedPosition(null);
         console.log('Signature position deleted successfully');
@@ -474,21 +475,51 @@ export default function PDFSignaturePage() {
         width: newPosition.width,
         height: newPosition.height,
         placeholderText: newPosition.placeholderText,
-        pageWidth: containerRect?.width || 800,
-        pageHeight: containerRect?.height || 600
+        pageWidth: Math.round(containerRect?.width || 800),
+        pageHeight: Math.round(containerRect?.height || 600)
       };
 
       console.log('Saving signature position request:', createRequest);
 
-      const result = await createSignaturePosition(createRequest);
+      // 使用认证头直接调用API
+      const headers = await getAuthHeaders();
+      console.log('Request headers:', headers);
+      
+      const response = await fetch('/api/signature/positions', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(createRequest)
+      });
+
+      const result = await response.json();
+      console.log('API Response:', response.status, result);
+      
+      if (!response.ok) {
+        console.error('API Error Response:', result);
+        throw new Error(result.error || `HTTP ${response.status}: ${result.message || 'Unknown error'}`);
+      }
       
       if (result.success && result.data) {
+        // 处理API响应数据，转换为前端格式
+        const savedPosition: SignaturePosition = {
+          id: result.data.id,
+          recipientId: result.data.recipient?.id || selectedRecipient.id,
+          fileId: result.data.file?.id || newPosition.fileId,
+          pageNumber: result.data.position?.pageNumber || newPosition.pageNumber,
+          x: result.data.position?.coordinates?.percent?.x || newPosition.x,
+          y: result.data.position?.coordinates?.percent?.y || newPosition.y,
+          width: result.data.position?.coordinates?.percent?.width || newPosition.width,
+          height: result.data.position?.coordinates?.percent?.height || newPosition.height,
+          placeholderText: result.data.placeholderText || newPosition.placeholderText,
+          status: result.data.status || 'pending'
+        };
+
         // Replace temporary position with real one
         setSignaturePositions(prev => 
-          prev.map(p => p.id === tempId ? result.data! : p)
+          prev.map(p => p.id === tempId ? savedPosition : p)
         );
-        setSelectedPosition(result.data);
-        console.log('Signature position saved successfully:', result.data);
+        setSelectedPosition(savedPosition);
+        console.log('Signature position saved successfully:', savedPosition);
       } else {
         // Save failed, remove temporary position
         setSignaturePositions(prev => prev.filter(p => p.id !== tempId));
@@ -501,7 +532,13 @@ export default function PDFSignaturePage() {
       setSignaturePositions(prev => prev.filter(p => p.id !== tempId));
       setSelectedPosition(null);
       console.error('Error saving signature position:', error);
-      alert('Save failed, please check network connection');
+      
+      // More helpful error message
+      if (error instanceof Error && error.message.includes('签字位置冲突')) {
+        alert(`Cannot add signature here: ${error.message}\n\nTip: You can:\n1. Choose a different location\n2. Delete existing signature positions\n3. Select a different recipient`);
+      } else {
+        alert('Save failed, please check network connection');
+      }
     } finally {
       setSavingPosition(false);
     }
@@ -511,10 +548,12 @@ export default function PDFSignaturePage() {
   const [draggedItem, setDraggedItem] = useState<string | null>(null);
 
   const handleDragStart = (itemType: string) => {
+    console.log(`[Page] handleDragStart called with type: ${itemType}`);
     setDraggedItem(itemType);
   };
 
   const handleDragEnd = () => {
+    console.log(`[Page] handleDragEnd called, clearing draggedItem`);
     setDraggedItem(null);
   };
 
@@ -603,8 +642,57 @@ export default function PDFSignaturePage() {
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
           />
+          
+          {/* 测试拖拽区域 */}
+          
+          {/* 调试工具 */}
+          <div className="mt-4 p-3 bg-gray-100 rounded">
+            <h4 className="text-xs font-medium text-gray-700 mb-2">Debug Tools</h4>
+            <button
+              onClick={async () => {
+                try {
+                  const headers = await getAuthHeaders();
+                  const response = await fetch(`/api/test/list-positions?taskId=${taskId}`, {
+                    headers
+                  });
+                  const data = await response.json();
+                  console.log('All positions:', data);
+                  alert(`Total positions: ${data.totalPositions}\nCheck console for details`);
+                } catch (error) {
+                  console.error('Failed to list positions:', error);
+                }
+              }}
+              className="text-xs bg-blue-500 text-white px-2 py-1 rounded mr-2"
+            >
+              List All Positions
+            </button>
+            <button
+              onClick={async () => {
+                if (confirm('Delete ALL positions for this task?')) {
+                  try {
+                    const headers = await getAuthHeaders();
+                    const response = await fetch(`/api/test/list-positions?taskId=${taskId}`, {
+                      method: 'DELETE',
+                      headers
+                    });
+                    const data = await response.json();
+                    console.log('Delete result:', data);
+                    alert(`Deleted ${data.deletedCount} positions`);
+                    // Reload positions
+                    await loadSignaturePositions();
+                  } catch (error) {
+                    console.error('Failed to delete positions:', error);
+                  }
+                }
+              }}
+              className="text-xs bg-red-500 text-white px-2 py-1 rounded"
+            >
+              Clear All Positions
+            </button>
+          </div>
 
           <h3 className="text-sm font-medium text-gray-900 mb-3 mt-6">Recipients</h3>
+          <p className="text-xs text-gray-500 mb-2">Select a recipient to assign signature positions</p>
           <div className="space-y-2">
             {recipients.map((recipient) => (
               <div 
@@ -668,6 +756,39 @@ export default function PDFSignaturePage() {
         </div>
 
         {/* Center: PDF display area */}
+        <div className="flex-1 flex flex-col">
+          {/* Show current recipient info */}
+          {selectedRecipientId && recipients.length > 0 && (
+            <div className="bg-blue-50 border-b border-blue-200 px-4 py-2">
+              <div className="flex items-center justify-between">
+                <div className="text-sm">
+                  <span className="text-gray-600">Currently placing signatures for: </span>
+                  <span className="font-medium text-blue-700">
+                    {recipients.find(r => r.id === selectedRecipientId)?.name}
+                  </span>
+                  <span className="text-gray-500 ml-2">
+                    ({signaturePositions.filter(p => p.recipientId === selectedRecipientId).length} positions)
+                  </span>
+                </div>
+                {signaturePositions.filter(p => p.recipientId === selectedRecipientId).length > 0 && (
+                  <button
+                    onClick={() => {
+                      if (confirm('Delete all positions for this recipient?')) {
+                        const positionsToDelete = signaturePositions.filter(p => p.recipientId === selectedRecipientId);
+                        positionsToDelete.forEach(p => {
+                          if (p.id) handlePositionDelete(p.id);
+                        });
+                      }
+                    }}
+                    className="text-xs text-red-600 hover:text-red-700"
+                  >
+                    Clear All
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+          
         <SimplePDFViewer
           files={files}
           recipients={recipients}
@@ -695,7 +816,9 @@ export default function PDFSignaturePage() {
             handlePositionAdd({...apiPosition, fileId: currentFileId});
           }}
           onPageChange={handlePageChange}
+          onDragEnd={handleDragEnd}
         />
+        </div>
 
         {/* Right sidebar: Properties panel */}
         <div className="w-80 bg-white border-l border-gray-200 p-4">

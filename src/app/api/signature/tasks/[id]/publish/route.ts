@@ -56,8 +56,12 @@ export async function POST(
   
   try {
     // 1. 认证验证
+    console.log('[Publish API] Starting authentication validation...')
     const authResult = await validateAuth()
+    console.log('[Publish API] Auth result:', { success: authResult.success, userId: authResult.userId })
+    
     if (!authResult.success) {
+      console.error('[Publish API] Authentication failed:', authResult.error)
       return NextResponse.json({
         success: false,
         error: 'Unauthorized',
@@ -164,12 +168,27 @@ export async function POST(
     let emailDetails = null
 
     try {
+      console.log('[Publish API] Calling email send API with options:', {
+        taskId,
+        customMessage: !!customMessage,
+        companyName: !!companyName,
+        expiryDays,
+        testMode: dryRun
+      })
+      
       const emailResponse = await callEmailSendAPI(taskId, {
         customMessage,
         companyName,
         expiryDays,
         testMode: dryRun
       }, request)
+      
+      console.log('[Publish API] Email API response received:', {
+        success: emailResponse.success,
+        totalRecipients: emailResponse.totalRecipients,
+        sentCount: emailResponse.sentCount,
+        error: emailResponse.error
+      })
 
       if (emailResponse.success) {
         emailSummary = {
@@ -346,6 +365,8 @@ async function callEmailSendAPI(
   },
   originalRequest: NextRequest
 ) {
+  console.log('[callEmailSendAPI] Starting email API call...')
+  
   const emailRequestBody = {
     taskId: taskId,
     customMessage: options.customMessage,
@@ -357,21 +378,46 @@ async function callEmailSendAPI(
   // 构建内部API调用URL
   const baseUrl = originalRequest.nextUrl.origin
   const emailApiUrl = `${baseUrl}/api/signature/email/send`
+  
+  console.log('[callEmailSendAPI] Email API URL:', emailApiUrl)
+  console.log('[callEmailSendAPI] Request body:', emailRequestBody)
 
-  const response = await fetch(emailApiUrl, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      // 传递原始请求的认证头
-      'Authorization': originalRequest.headers.get('authorization') || ''
-    },
-    body: JSON.stringify(emailRequestBody)
-  })
+  const authHeader = originalRequest.headers.get('authorization')
+  console.log('[callEmailSendAPI] Auth header present:', !!authHeader)
 
-  if (!response.ok) {
-    const errorResult = await response.json()
-    throw new Error(`Email API failed: ${errorResult.error || errorResult.message}`)
+  try {
+    const response = await fetch(emailApiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        // 传递原始请求的认证头
+        'Authorization': authHeader || ''
+      },
+      body: JSON.stringify(emailRequestBody)
+    })
+
+    console.log('[callEmailSendAPI] Response status:', response.status)
+    console.log('[callEmailSendAPI] Response ok:', response.ok)
+
+    const responseText = await response.text()
+    console.log('[callEmailSendAPI] Response text:', responseText)
+
+    let responseData
+    try {
+      responseData = JSON.parse(responseText)
+    } catch (parseError) {
+      console.error('[callEmailSendAPI] Failed to parse response:', parseError)
+      throw new Error(`Invalid JSON response: ${responseText}`)
+    }
+
+    if (!response.ok) {
+      console.error('[callEmailSendAPI] Email API error response:', responseData)
+      throw new Error(`Email API failed: ${responseData.error || responseData.message || `HTTP ${response.status}`}`)
+    }
+
+    return responseData
+  } catch (error) {
+    console.error('[callEmailSendAPI] Fetch error:', error)
+    throw error
   }
-
-  return await response.json()
 } 

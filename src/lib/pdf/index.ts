@@ -76,6 +76,15 @@ export type {
 // 枚举导出
 export { SignatureElementType, PDFErrorCode } from './pdf-types';
 
+// 坐标转换器
+export { 
+  transformElementToInstruction,
+  transformElementsToInstructions,
+  createSignatureElementFromDB,
+  validateCoordinates,
+  debugCoordinateTransform
+} from './coordinate-transformer';
+
 // 所有主要功能都已通过上面的导出语句可用
 // 用户可以直接使用：
 // import { createPDFProcessor, analyzePDFFile, validatePDFFile } from '@/lib/pdf'; 
