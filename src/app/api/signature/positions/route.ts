@@ -244,4 +244,87 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     )
   }
+}
+
+/**
+ * GET /api/signature/positions
+ * 获取签字位置列表
+ */
+export async function GET(request: NextRequest) {
+  try {
+    console.log('[API] GET /api/signature/positions - Start');
+    
+    // 使用统一的认证中间件
+    const authResult = await validateAuth()
+    if (!authResult.success) {
+      console.error('[API] Auth failed:', authResult.error);
+      return NextResponse.json(
+        { error: 'Unauthorized', message: authResult.error },
+        { status: 401 }
+      )
+    }
+    
+    const userId = authResult.userId!
+    console.log('[API] Auth success, userId:', userId);
+
+    const searchParams = request.nextUrl.searchParams
+    const fileId = searchParams.get('fileId')
+    const taskId = searchParams.get('taskId')
+    const recipientId = searchParams.get('recipientId')
+
+    // 构建查询
+    let query = supabase
+      .from('signature_positions')
+      .select(`
+        *,
+        signature_recipients!inner(
+          id, 
+          name, 
+          email,
+          task_id,
+          signature_tasks!inner(
+            id,
+            user_id
+          )
+        )
+      `)
+      .eq('signature_recipients.signature_tasks.user_id', userId)
+
+    // 应用过滤条件
+    if (fileId) {
+      query = query.eq('file_id', fileId)
+    }
+    
+    if (recipientId) {
+      query = query.eq('recipient_id', recipientId)
+    }
+
+    if (taskId) {
+      query = query.eq('signature_recipients.task_id', taskId)
+    }
+
+    const { data: positions, error } = await query
+
+    if (error) {
+      console.error('[API] 查询签字位置错误:', error)
+      throw new Error(`查询签字位置失败: ${error.message}`)
+    }
+
+    console.log('[API] Found positions:', positions?.length || 0)
+
+    return NextResponse.json({
+      success: true,
+      data: positions || []
+    })
+
+  } catch (error) {
+    console.error('[API] 获取签字位置错误:', error)
+    return NextResponse.json(
+      { 
+        error: '获取签字位置失败',
+        details: error instanceof Error ? error.message : String(error)
+      },
+      { status: 500 }
+    )
+  }
 } 

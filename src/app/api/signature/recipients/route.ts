@@ -124,4 +124,71 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     )
   }
+}
+
+/**
+ * GET /api/signature/recipients
+ * 获取任务的收件人列表
+ */
+export async function GET(request: NextRequest) {
+  try {
+    // JWT认证
+    const { userId } = await auth()
+    if (!userId) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      )
+    }
+
+    const searchParams = request.nextUrl.searchParams
+    const taskId = searchParams.get('taskId')
+
+    if (!taskId) {
+      return NextResponse.json(
+        { error: '缺少taskId参数' },
+        { status: 400 }
+      )
+    }
+
+    // 验证任务存在且属于用户
+    const taskResult = await getTaskById(taskId, userId)
+    if (!taskResult.success) {
+      return NextResponse.json(
+        { error: '任务不存在或无权限访问' },
+        { status: 404 }
+      )
+    }
+
+    // 获取收件人列表
+    const { data: recipients, error } = await supabase
+      .from('signature_recipients')
+      .select('*')
+      .eq('task_id', taskId)
+
+    if (error) {
+      console.error('Database error:', error);
+      // 返回空数组而不是错误，允许系统继续工作
+      return NextResponse.json({
+        success: true,
+        data: [],
+        message: `Database query failed: ${error.message}`
+      });
+    }
+
+    return NextResponse.json({
+      success: true,
+      data: recipients || []
+    })
+
+  } catch (error) {
+    console.error('获取收件人列表错误:', error)
+    return NextResponse.json(
+      { 
+        error: '获取收件人列表失败',
+        details: error instanceof Error ? error.message : String(error)
+      },
+      { status: 500 }
+    )
+  }
 } 

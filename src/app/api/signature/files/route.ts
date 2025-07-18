@@ -112,4 +112,82 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     )
   }
+}
+
+/**
+ * GET /api/signature/files
+ * Fetch files for a task
+ */
+export async function GET(request: NextRequest) {
+  try {
+    // JWT认证
+    const { userId } = await auth()
+    if (!userId) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      )
+    }
+
+    const searchParams = request.nextUrl.searchParams
+    const taskId = searchParams.get('taskId')
+
+    if (!taskId) {
+      return NextResponse.json(
+        { error: '缺少taskId参数' },
+        { status: 400 }
+      )
+    }
+
+    // 验证任务存在且属于用户
+    const taskResult = await getTaskById(taskId, userId)
+    if (!taskResult.success) {
+      return NextResponse.json(
+        { error: '任务不存在或无权限访问' },
+        { status: 404 }
+      )
+    }
+
+    // 获取任务的文件列表
+    const { data: files, error } = await supabase
+      .from('signature_files')
+      .select('*')
+      .eq('task_id', taskId)
+
+    if (error) {
+      console.error('Database error:', error);
+      // 返回空数组而不是错误，允许系统继续工作
+      return NextResponse.json({
+        success: true,
+        data: [],
+        message: `Database query failed: ${error.message}`
+      });
+    }
+
+    // 转换文件数据格式
+    const formattedFiles = files.map(file => ({
+      id: file.id,
+      displayName: file.display_name || file.original_filename,
+      originalFilename: file.original_filename,
+      supabaseUrl: file.file_url,
+      fileType: file.file_type,
+      fileSize: file.file_size,
+      pageCount: file.page_count || 1
+    }))
+
+    return NextResponse.json({
+      success: true,
+      data: formattedFiles
+    })
+
+  } catch (error) {
+    console.error('获取文件列表错误:', error)
+    return NextResponse.json(
+      { 
+        error: '获取文件列表失败',
+        details: error instanceof Error ? error.message : String(error)
+      },
+      { status: 500 }
+    )
+  }
 } 

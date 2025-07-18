@@ -72,7 +72,7 @@ export default function DraftsComponent({ tasks, onRefresh }: DraftsComponentPro
                 <td className="px-6 py-4 whitespace-nowrap">
                   <button
                     className="text-blue-600 hover:text-blue-900 cursor-pointer font-medium bg-transparent border-none p-0"
-                    onClick={() => router.push(`/app/signature/create-task/${task.id}`)}
+                    onClick={() => router.push(`/app/signature/pdf/${task.id}`)}
                   >
                     {task.title}
                   </button>

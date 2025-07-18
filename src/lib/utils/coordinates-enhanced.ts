@@ -230,12 +230,29 @@ export function validatePositionBounds(
 // 导出签名组件类型
 export type WidgetType = 'signature' | 'date' | 'text' | 'checkbox' | 'initials' | 'name' | 'email' | 'company' | 'job title' | 'stamp'; 
 
+// 从placeholder文本推断widget类型
+function inferTypeFromPlaceholder(placeholder: string): string {
+  const lowerPlaceholder = placeholder.toLowerCase();
+  if (lowerPlaceholder.includes('sign')) return 'signature';
+  if (lowerPlaceholder.includes('date')) return 'date';
+  if (lowerPlaceholder.includes('initial')) return 'initials';
+  if (lowerPlaceholder.includes('name')) return 'name';
+  if (lowerPlaceholder.includes('email')) return 'email';
+  if (lowerPlaceholder.includes('text')) return 'text';
+  if (lowerPlaceholder.includes('company')) return 'company';
+  if (lowerPlaceholder.includes('job')) return 'job title';
+  return 'signature'; // default
+}
+
 // 将API类型转换为组件类型
 export function convertToComponentPosition(position: ApiSignaturePosition): SignaturePositionData {
+  // 推断widget类型
+  const inferredType = inferTypeFromPlaceholder(position.placeholderText || '');
+  
   // API返回的是百分比坐标，直接使用
   return {
     key: position.id || generateUniqueKey(),
-    type: 'signature',
+    type: inferredType,
     // 使用百分比坐标
     xPosition: position.x,
     yPosition: position.y,
@@ -253,7 +270,7 @@ export function convertToComponentPosition(position: ApiSignaturePosition): Sign
     options: {
       fontSize: 12,
       fontColor: 'black',
-      placeholder: position.placeholderText || getPlaceholderText('signature')
+      placeholder: position.placeholderText || getPlaceholderText(inferredType)
     }
   };
 }
