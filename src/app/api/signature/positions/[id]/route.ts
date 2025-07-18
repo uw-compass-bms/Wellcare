@@ -37,7 +37,10 @@ export async function PUT(
       pageNumber,
       pageWidth,
       pageHeight,
-      placeholderText
+      placeholderText,
+      fieldType,
+      fieldMeta,
+      isRequired
     } = body
 
     // 验证位置存在且属于用户的任务
@@ -188,6 +191,28 @@ export async function PUT(
       updates.placeholder_text = placeholderText
     }
 
+    // 如果提供了字段类型更新
+    if (fieldType !== undefined) {
+      const validFieldTypes = ['signature', 'date', 'text', 'name', 'email', 'number', 'checkbox']
+      if (!validFieldTypes.includes(fieldType)) {
+        return NextResponse.json(
+          { error: `无效的字段类型: ${fieldType}。有效类型: ${validFieldTypes.join(', ')}` },
+          { status: 400 }
+        )
+      }
+      updates.field_type = fieldType
+    }
+
+    // 如果提供了字段元数据更新
+    if (fieldMeta !== undefined) {
+      updates.field_meta = fieldMeta
+    }
+
+    // 如果提供了必填标记更新
+    if (isRequired !== undefined) {
+      updates.is_required = isRequired
+    }
+
     // 检查是否有可更新的字段
     if (Object.keys(updates).length === 0) {
       return NextResponse.json(
@@ -249,6 +274,9 @@ export async function PUT(
           }
         },
         placeholderText: updatedPosition.placeholder_text,
+        fieldType: updatedPosition.field_type,
+        fieldMeta: updatedPosition.field_meta,
+        isRequired: updatedPosition.is_required,
         status: updatedPosition.status,
         updatedAt: new Date().toISOString()
       }

@@ -4,9 +4,43 @@ import React, { useState, useCallback } from 'react';
 import { Rnd } from 'react-rnd';
 import { Trash2, Calendar, Type, Hash, CheckSquare, Mail, User } from 'lucide-react';
 
+export type FieldType = 'signature' | 'date' | 'text' | 'number' | 'checkbox' | 'email' | 'name';
+
+export interface FieldMeta {
+  // Text field metadata
+  maxLength?: number;
+  minLength?: number;
+  multiline?: boolean;
+  placeholder?: string;
+  pattern?: string;
+  
+  // Date field metadata
+  format?: string;
+  minDate?: string;
+  maxDate?: string;
+  
+  // Number field metadata
+  min?: number;
+  max?: number;
+  
+  // Signature field metadata
+  penColor?: string;
+  lineWidth?: number;
+  
+  // Checkbox metadata
+  defaultChecked?: boolean;
+  
+  // Email validation
+  validation?: string;
+  
+  // General
+  label?: string;
+  [key: string]: any;
+}
+
 export interface Field {
   id: string;
-  type: 'signature' | 'date' | 'text' | 'number' | 'checkbox' | 'email' | 'name';
+  type: FieldType;
   recipientId: string;
   pageNumber: number;
   x: number;      // 百分比坐标 0-100
@@ -15,6 +49,8 @@ export interface Field {
   height: number;  // 百分比高度 0-100
   required?: boolean;
   placeholder?: string;
+  fieldMeta?: FieldMeta;
+  defaultValue?: string;
 }
 
 interface FieldItemProps {

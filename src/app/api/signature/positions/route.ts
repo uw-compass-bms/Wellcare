@@ -36,7 +36,10 @@ export async function POST(request: NextRequest) {
       height,
       pageWidth = 595,    // PDF标准页面宽度
       pageHeight = 842,   // PDF标准页面高度
-      placeholderText = 'Click to sign'
+      placeholderText = 'Click to sign',
+      fieldType = 'signature',  // 默认为签名字段
+      fieldMeta = {},          // 字段元数据
+      isRequired = true        // 默认必填
     } = body
 
     console.log('[API] Creating position for recipient:', recipientId);
@@ -47,6 +50,15 @@ export async function POST(request: NextRequest) {
         width === undefined || height === undefined) {
       return NextResponse.json(
         { error: '缺少必要参数: recipientId, fileId, pageNumber, x, y, width, height' },
+        { status: 400 }
+      )
+    }
+
+    // 验证字段类型
+    const validFieldTypes = ['signature', 'date', 'text', 'name', 'email', 'number', 'checkbox']
+    if (!validFieldTypes.includes(fieldType)) {
+      return NextResponse.json(
+        { error: `无效的字段类型: ${fieldType}。有效类型: ${validFieldTypes.join(', ')}` },
         { status: 400 }
       )
     }
@@ -177,7 +189,10 @@ export async function POST(request: NextRequest) {
         height_pixel: pixelHeight,
         page_width: Math.round(pageWidth),
         page_height: Math.round(pageHeight),
-        placeholder_text: placeholderText
+        placeholder_text: placeholderText,
+        field_type: fieldType,
+        field_meta: fieldMeta,
+        is_required: isRequired
       })
       .select(`
         *,
@@ -227,6 +242,9 @@ export async function POST(request: NextRequest) {
           }
         },
         placeholderText: newPosition.placeholder_text,
+        fieldType: newPosition.field_type,
+        fieldMeta: newPosition.field_meta,
+        isRequired: newPosition.is_required,
         status: newPosition.status,
         createdAt: newPosition.created_at
       }

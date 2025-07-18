@@ -3,7 +3,10 @@
 import React from 'react';
 import { Calendar, Type, Hash, CheckSquare, Mail, User, FileSignature } from 'lucide-react';
 
-export type FieldType = 'signature' | 'date' | 'text' | 'number' | 'checkbox' | 'email' | 'name';
+import { FieldType } from './FieldItem';
+
+// Re-export for convenience
+export type { FieldType };
 
 interface FieldPaletteProps {
   selectedType: FieldType | null;

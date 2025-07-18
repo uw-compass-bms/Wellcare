@@ -7,11 +7,12 @@ import { FieldPalette, FieldType } from './FieldPalette';
 import { MobileFieldPalette } from './MobileFieldPalette';
 import { FieldItem, Field } from './FieldItem';
 import { VirtualizedFieldLayer } from './VirtualizedFieldLayer';
+import { FieldPropertiesPanel } from './FieldPropertiesPanel';
 import { nanoid } from 'nanoid';
 import { useFieldsApi } from '../hooks/useFieldsApi';
 import { useDebounce } from '../hooks/useDebounce';
 import { useFieldHistory } from '../hooks/useFieldHistory';
-import { Menu, Plus, Undo2, Redo2 } from 'lucide-react';
+import { Menu, Plus, Undo2, Redo2, Settings } from 'lucide-react';
 
 interface ProductionSignatureCanvasProps {
   taskId: string;
@@ -37,6 +38,8 @@ export const ProductionSignatureCanvas: React.FC<ProductionSignatureCanvasProps>
   const [isMobile, setIsMobile] = useState(false);
   const [isMobilePaletteOpen, setIsMobilePaletteOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isPropertiesPanelOpen, setIsPropertiesPanelOpen] = useState(false);
+  const [selectedFieldForProperties, setSelectedFieldForProperties] = useState<Field | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   
   const { loading, error, fetchFields, createField, updateField, deleteField } = useFieldsApi({
@@ -217,6 +220,13 @@ export const ProductionSignatureCanvas: React.FC<ProductionSignatureCanvasProps>
     setActiveFieldId(newField.id);
     setSelectedFieldType(null);
     
+    // 打开属性面板
+    const fieldForProperties = newFields.find(f => f.id === newField.id);
+    if (fieldForProperties) {
+      setSelectedFieldForProperties(fieldForProperties);
+      setIsPropertiesPanelOpen(true);
+    }
+    
     if (isMobile) {
       setIsMobilePaletteOpen(false);
     }
@@ -234,7 +244,15 @@ export const ProductionSignatureCanvas: React.FC<ProductionSignatureCanvasProps>
     );
     debouncedPushState(newFields);
     debouncedUpdateField(id, updates);
-  }, [fields, debouncedPushState, debouncedUpdateField]);
+    
+    // 更新属性面板中的字段
+    if (selectedFieldForProperties?.id === id) {
+      const updatedField = newFields.find(f => f.id === id);
+      if (updatedField) {
+        setSelectedFieldForProperties(updatedField);
+      }
+    }
+  }, [fields, debouncedPushState, debouncedUpdateField, selectedFieldForProperties]);
 
   // Handle field delete
   const handleFieldDelete = useCallback(async (id: string) => {
@@ -249,6 +267,18 @@ export const ProductionSignatureCanvas: React.FC<ProductionSignatureCanvasProps>
       undo();
     }
   }, [fields, activeFieldId, pushState, deleteField, undo]);
+
+  // 处理字段激活（点击字段时）
+  const handleFieldActivate = useCallback((fieldId: string) => {
+    setActiveFieldId(fieldId);
+    
+    // 找到对应的字段并打开属性面板
+    const field = fields.find(f => f.id === fieldId);
+    if (field) {
+      setSelectedFieldForProperties(field);
+      setIsPropertiesPanelOpen(true);
+    }
+  }, [fields]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -324,10 +354,31 @@ export const ProductionSignatureCanvas: React.FC<ProductionSignatureCanvasProps>
         <div className="h-full overflow-y-auto p-4 pt-16 md:pt-4">
           {/* Desktop field palette */}
           {!isMobile && (
-            <FieldPalette
-              selectedType={selectedFieldType}
-              onSelectType={setSelectedFieldType}
-            />
+            <>
+              <FieldPalette
+                selectedType={selectedFieldType}
+                onSelectType={setSelectedFieldType}
+              />
+              
+              {/* Field properties button */}
+              {activeFieldId && (
+                <div className="mt-4">
+                  <button
+                    onClick={() => {
+                      const field = fields.find(f => f.id === activeFieldId);
+                      if (field) {
+                        setSelectedFieldForProperties(field);
+                        setIsPropertiesPanelOpen(true);
+                      }
+                    }}
+                    className="w-full flex items-center justify-center gap-2 p-3 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg transition-colors"
+                  >
+                    <Settings className="w-4 h-4" />
+                    <span className="text-sm font-medium">Field Properties</span>
+                  </button>
+                </div>
+              )}
+            </>
           )}
           
           {/* Field stats */}
@@ -341,6 +392,25 @@ export const ProductionSignatureCanvas: React.FC<ProductionSignatureCanvasProps>
               )}
             </div>
           </div>
+          
+          {/* Properties Panel Button */}
+          {!isMobile && activeFieldId && (
+            <div className="mt-4">
+              <button
+                onClick={() => {
+                  const field = fields.find(f => f.id === activeFieldId);
+                  if (field) {
+                    setSelectedFieldForProperties(field);
+                    setIsPropertiesPanelOpen(true);
+                  }
+                }}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+              >
+                <Settings className="w-4 h-4" />
+                Field Properties
+              </button>
+            </div>
+          )}
           
           {/* Status */}
           {loading && (
@@ -388,7 +458,7 @@ export const ProductionSignatureCanvas: React.FC<ProductionSignatureCanvasProps>
               viewportBounds={viewportBounds.get(pageNumber)}
               onFieldUpdate={handleFieldUpdate}
               onFieldDelete={handleFieldDelete}
-              onFieldActivate={setActiveFieldId}
+              onFieldActivate={handleFieldActivate}
             />
           ))
         ) : (
@@ -411,7 +481,7 @@ export const ProductionSignatureCanvas: React.FC<ProductionSignatureCanvasProps>
                       isActive={field.id === activeFieldId}
                       onUpdate={handleFieldUpdate}
                       onDelete={handleFieldDelete}
-                      onActivate={setActiveFieldId}
+                      onActivate={handleFieldActivate}
                     />
                   </div>
                 ))}
@@ -431,6 +501,17 @@ export const ProductionSignatureCanvas: React.FC<ProductionSignatureCanvasProps>
           onClose={() => setIsMobilePaletteOpen(false)}
         />
       )}
+      
+      {/* Field Properties Panel */}
+      <FieldPropertiesPanel
+        field={selectedFieldForProperties}
+        isOpen={isPropertiesPanelOpen}
+        onClose={() => {
+          setIsPropertiesPanelOpen(false);
+          setSelectedFieldForProperties(null);
+        }}
+        onUpdate={handleFieldUpdate}
+      />
     </div>
   );
 };

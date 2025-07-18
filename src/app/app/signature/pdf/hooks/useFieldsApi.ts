@@ -23,6 +23,10 @@ interface FieldApiData {
   page_width: number;
   page_height: number;
   placeholder_text: string;
+  field_type?: string;
+  field_meta?: any;
+  is_required?: boolean;
+  default_value?: string;
   status: string;
   created_at?: string;
   updated_at?: string;
@@ -39,15 +43,17 @@ export const useFieldsApi = ({ taskId, recipientId, fileId }: UseFieldsApiProps)
   // Convert API data to Field format
   const apiToField = (apiData: FieldApiData): Field => ({
     id: apiData.id,
-    type: 'signature', // Default type for now
+    type: (apiData.field_type || 'signature') as Field['type'],
     recipientId: apiData.recipient_id,
     pageNumber: apiData.page_number,
     x: apiData.x_percent,
     y: apiData.y_percent,
     width: apiData.width_percent,
     height: apiData.height_percent,
-    required: true,
+    required: apiData.is_required ?? true,
     placeholder: apiData.placeholder_text,
+    fieldMeta: apiData.field_meta || {},
+    defaultValue: apiData.default_value,
   });
 
   // Convert Field to API format for POST request
@@ -62,6 +68,9 @@ export const useFieldsApi = ({ taskId, recipientId, fileId }: UseFieldsApiProps)
     pageWidth: 595,  // Default PDF width
     pageHeight: 842, // Default PDF height
     placeholderText: field.placeholder || 'Click to sign',
+    fieldType: field.type,
+    fieldMeta: field.fieldMeta || {},
+    isRequired: field.required !== undefined ? field.required : true,
   });
 
   // Fetch fields from API
@@ -125,6 +134,9 @@ export const useFieldsApi = ({ taskId, recipientId, fileId }: UseFieldsApiProps)
           page_width: result.data.position.pageDimensions.width,
           page_height: result.data.position.pageDimensions.height,
           placeholder_text: result.data.placeholderText,
+          field_type: result.data.fieldType,
+          field_meta: result.data.fieldMeta,
+          is_required: result.data.isRequired,
           status: result.data.status,
         };
         return apiToField(fieldData);
@@ -156,6 +168,10 @@ export const useFieldsApi = ({ taskId, recipientId, fileId }: UseFieldsApiProps)
           height: updates.height,
           required: updates.required,
           placeholder: updates.placeholder,
+          fieldType: updates.type,
+          fieldMeta: updates.fieldMeta,
+          isRequired: updates.required,
+          defaultValue: updates.defaultValue,
         }),
       });
       
