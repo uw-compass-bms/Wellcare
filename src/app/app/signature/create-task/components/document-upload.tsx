@@ -2,7 +2,7 @@
 
 import React, { useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
-import { Upload, FileText, Trash2, Download } from 'lucide-react';
+import { Upload, FileText, Trash2, GripVertical } from 'lucide-react';
 
 interface FileInfo {
   id: string;
@@ -18,16 +18,20 @@ interface DocumentUploadProps {
   files: FileInfo[];
   onFileUploaded: (fileInfo: FileInfo) => void;
   onFileDeleted: (fileId: string) => void;
+  onFilesReordered?: (files: FileInfo[]) => void;
 }
 
 export default function DocumentUpload({
   taskId,
   files,
   onFileUploaded,
-  onFileDeleted
+  onFileDeleted,
+  onFilesReordered
 }: DocumentUploadProps) {
   const [uploading, setUploading] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [draggedFile, setDraggedFile] = useState<string | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
   console.log('DocumentUpload render - uploading:', uploading, 'taskId:', taskId);
 
@@ -64,7 +68,15 @@ export default function DocumentUpload({
 
         if (response.ok) {
           const result = await response.json();
-          onFileUploaded(result.data);
+          const fileInfo: FileInfo = {
+            id: result.data.id,
+            originalFilename: result.data.original_filename || file.name,
+            displayName: result.data.display_name || result.data.original_filename || file.name,
+            fileSize: result.data.file_size || file.size,
+            status: 'uploaded',
+            uploadedAt: result.data.created_at || new Date().toISOString()
+          };
+          onFileUploaded(fileInfo);
         } else {
           const error = await response.json();
           alert(`Upload failed: ${error.error}`);
@@ -102,26 +114,6 @@ export default function DocumentUpload({
     }
   };
 
-  // 下载文件
-  const handleDownloadFile = async (fileId: string, fileName: string) => {
-    try {
-      const response = await fetch(`/api/signature/files/${fileId}/download`);
-      if (response.ok) {
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = fileName;
-        a.click();
-        window.URL.revokeObjectURL(url);
-      } else {
-        alert('Download failed');
-      }
-    } catch (error) {
-      console.error('Download error:', error);
-      alert('Download failed');
-    }
-  };
 
   return (
     <div className="space-y-4">
@@ -163,40 +155,79 @@ export default function DocumentUpload({
       {/* 文件列表 */}
       {files.length > 0 && (
         <div className="space-y-3">
-          <h4 className="font-medium text-gray-900">Files ({files.length})</h4>
-          {files.map((file) => (
-            <div key={file.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+          <div className="flex justify-between items-center">
+            <h4 className="font-medium text-gray-900">Files ({files.length})</h4>
+            {files.length > 1 && (
+              <p className="text-sm text-gray-500">Drag to reorder</p>
+            )}
+          </div>
+          {files.map((file, index) => (
+            <div 
+              key={file.id} 
+              className={`flex items-center justify-between p-3 bg-gray-50 rounded-lg transition-all cursor-move ${
+                dragOverIndex === index ? 'border-2 border-teal-400' : ''
+              } ${draggedFile === file.id ? 'opacity-50' : ''}`}
+              draggable={files.length > 1}
+              onDragStart={(e) => {
+                setDraggedFile(file.id);
+                e.dataTransfer.effectAllowed = 'move';
+              }}
+              onDragEnd={() => {
+                setDraggedFile(null);
+                setDragOverIndex(null);
+              }}
+              onDragOver={(e) => {
+                e.preventDefault();
+                setDragOverIndex(index);
+              }}
+              onDragLeave={() => {
+                setDragOverIndex(null);
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                if (!draggedFile || !onFilesReordered) return;
+                
+                const draggedIndex = files.findIndex(f => f.id === draggedFile);
+                if (draggedIndex === -1 || draggedIndex === index) return;
+                
+                const newFiles = [...files];
+                const [removed] = newFiles.splice(draggedIndex, 1);
+                newFiles.splice(index, 0, removed);
+                
+                onFilesReordered(newFiles);
+                setDraggedFile(null);
+                setDragOverIndex(null);
+              }}
+            >
               <div className="flex items-center space-x-3">
+                {files.length > 1 && (
+                  <GripVertical className="h-4 w-4 text-gray-400" />
+                )}
                 <FileText className="h-6 w-6 text-red-500" />
                 <div>
-                  <p className="font-medium text-gray-900">{file.displayName || file.originalFilename}</p>
-                  <p className="text-sm text-gray-500">Uploaded</p>
+                  <p className="font-medium text-gray-900">
+                    {index + 1}. {file.displayName || file.originalFilename || 'Unnamed File'}
+                  </p>
+                  <p className="text-sm text-gray-500">
+                    {(file.fileSize / 1024).toFixed(1)} KB
+                  </p>
                 </div>
               </div>
               
-              <div className="flex items-center space-x-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleDownloadFile(file.id, file.originalFilename)}
-                >
-                  <Download className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleDeleteFile(file.id)}
-                  disabled={deleting === file.id}
-                  className="text-red-600 hover:text-red-700 hover:bg-red-50 hover:border-red-200 transition-colors"
-                  title="Delete file"
-                >
-                  {deleting === file.id ? (
-                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-red-300 border-t-red-600" />
-                  ) : (
-                    <Trash2 className="h-4 w-4" />
-                  )}
-                </Button>
-              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleDeleteFile(file.id)}
+                disabled={deleting === file.id}
+                className="text-red-600 hover:text-red-700 hover:bg-red-50 hover:border-red-200 transition-colors"
+                title="Delete file"
+              >
+                {deleting === file.id ? (
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-red-300 border-t-red-600" />
+                ) : (
+                  <Trash2 className="h-4 w-4" />
+                )}
+              </Button>
             </div>
           ))}
         </div>

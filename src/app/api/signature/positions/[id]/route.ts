@@ -40,7 +40,8 @@ export async function PUT(
       placeholderText,
       fieldType,
       fieldMeta,
-      isRequired
+      isRequired,
+      defaultValue
     } = body
 
     // 验证位置存在且属于用户的任务
@@ -211,6 +212,11 @@ export async function PUT(
     // 如果提供了必填标记更新
     if (isRequired !== undefined) {
       updates.is_required = isRequired
+    }
+    
+    // 如果提供了默认值更新
+    if (defaultValue !== undefined) {
+      updates.default_value = defaultValue
     }
 
     // 检查是否有可更新的字段

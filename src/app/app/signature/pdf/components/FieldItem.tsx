@@ -115,8 +115,13 @@ export const FieldItem: React.FC<FieldItemProps> = ({
     setIsDragging(false);
     const newX = pixelsToPercentage(data.x, pageWidth);
     const newY = pixelsToPercentage(data.y, pageHeight);
-    onUpdate(field.id, { x: newX, y: newY });
-  }, [field.id, pageWidth, pageHeight, pixelsToPercentage, onUpdate]);
+    
+    // Ensure the field stays within bounds (0-100%)
+    const boundedX = Math.max(0, Math.min(newX, 100 - field.width));
+    const boundedY = Math.max(0, Math.min(newY, 100 - field.height));
+    
+    onUpdate(field.id, { x: boundedX, y: boundedY });
+  }, [field.id, field.width, field.height, pageWidth, pageHeight, pixelsToPercentage, onUpdate]);
 
   const handleResizeStop = useCallback((e: any, direction: any, ref: any, delta: any, position: any) => {
     const newWidth = pixelsToPercentage(ref.offsetWidth, pageWidth);
@@ -124,11 +129,17 @@ export const FieldItem: React.FC<FieldItemProps> = ({
     const newX = pixelsToPercentage(position.x, pageWidth);
     const newY = pixelsToPercentage(position.y, pageHeight);
     
+    // Ensure the field stays within bounds
+    const boundedWidth = Math.max(1, Math.min(newWidth, 50)); // Max 50% width
+    const boundedHeight = Math.max(0.5, Math.min(newHeight, 30)); // Max 30% height
+    const boundedX = Math.max(0, Math.min(newX, 100 - boundedWidth));
+    const boundedY = Math.max(0, Math.min(newY, 100 - boundedHeight));
+    
     onUpdate(field.id, {
-      x: newX,
-      y: newY,
-      width: newWidth,
-      height: newHeight,
+      x: boundedX,
+      y: boundedY,
+      width: boundedWidth,
+      height: boundedHeight,
     });
   }, [field.id, pageWidth, pageHeight, pixelsToPercentage, onUpdate]);
 
@@ -138,6 +149,14 @@ export const FieldItem: React.FC<FieldItemProps> = ({
       setEditValue(field.defaultValue || '');
     }
   }, [field.type, field.defaultValue]);
+
+  const handleClick = useCallback((e: React.MouseEvent) => {
+    // Prevent signature click action in editor mode
+    if (field.type === 'signature') {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  }, [field.type]);
 
   const handleEditComplete = useCallback(() => {
     if (isEditing) {
@@ -188,6 +207,7 @@ export const FieldItem: React.FC<FieldItemProps> = ({
           ${isDragging ? 'opacity-75 scale-105' : 'opacity-90 hover:opacity-100'}
         `}
         onDoubleClick={handleDoubleClick}
+        onClick={handleClick}
       >
         {isEditing ? (
           <input

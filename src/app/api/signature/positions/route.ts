@@ -39,7 +39,8 @@ export async function POST(request: NextRequest) {
       placeholderText = 'Click to sign',
       fieldType = 'signature',  // 默认为签名字段
       fieldMeta = {},          // 字段元数据
-      isRequired = true        // 默认必填
+      isRequired = true,       // 默认必填
+      defaultValue = ''        // 字段默认值
     } = body
 
     console.log('[API] Creating position for recipient:', recipientId);
@@ -192,7 +193,8 @@ export async function POST(request: NextRequest) {
         placeholder_text: placeholderText,
         field_type: fieldType,
         field_meta: fieldMeta,
-        is_required: isRequired
+        is_required: isRequired,
+        default_value: defaultValue
       })
       .select(`
         *,

@@ -80,8 +80,8 @@ export const COORDINATE_CONSTANTS = {
   // 尺寸限制
   MIN_SIGNATURE_WIDTH: 1,    // 最小签字框宽度 (百分比)
   MIN_SIGNATURE_HEIGHT: 0.5, // 最小签字框高度 (百分比)
-  MAX_SIGNATURE_WIDTH: 30,   // 最大签字框宽度 (百分比)
-  MAX_SIGNATURE_HEIGHT: 20,  // 最大签字框高度 (百分比)
+  MAX_SIGNATURE_WIDTH: 50,   // 最大签字框宽度 (百分比) - 增加到50%
+  MAX_SIGNATURE_HEIGHT: 30,  // 最大签字框高度 (百分比) - 增加到30%
   
   // 页码限制
   MIN_PAGE_NUMBER: 1,

@@ -65,7 +65,43 @@ export default function TaskConfigurationPage() {
       if (taskResponse.ok) {
         const taskData = await taskResponse.json();
         setTask(taskData.task);
-        setFiles(taskData.files || []); // 从task响应中获取files信息
+        
+        // Map file data correctly
+        const mappedFiles = (taskData.files || []).map((file: any, index: number) => ({
+          id: file.id,
+          originalFilename: file.original_filename || file.originalFilename,
+          displayName: file.display_name || file.displayName || file.original_filename || file.originalFilename,
+          fileSize: file.file_size || file.fileSize || 0,
+          status: 'uploaded',
+          uploadedAt: file.created_at || file.uploadedAt || new Date().toISOString(),
+          fileOrder: file.file_order || index + 1
+        }));
+        
+        // Sort by file_order if available
+        mappedFiles.sort((a: any, b: any) => a.fileOrder - b.fileOrder);
+        
+        // Check if we have a saved order in localStorage
+        const savedOrder = localStorage.getItem(`task-${taskId}-file-order`);
+        if (savedOrder) {
+          try {
+            const orderMap = JSON.parse(savedOrder);
+            const orderDict = Object.fromEntries(orderMap.map((item: any) => [item.id, item.order]));
+            
+            // Apply saved order if it exists
+            mappedFiles.forEach((file: any) => {
+              if (orderDict[file.id]) {
+                file.fileOrder = orderDict[file.id];
+              }
+            });
+            
+            // Re-sort with saved order
+            mappedFiles.sort((a: any, b: any) => a.fileOrder - b.fileOrder);
+          } catch (e) {
+            console.log('Failed to parse saved file order');
+          }
+        }
+        
+        setFiles(mappedFiles);
       }
 
       if (recipientsResponse.ok) {
@@ -95,18 +131,69 @@ export default function TaskConfigurationPage() {
     setRecipients(newRecipients);
   };
 
+  // 处理文件重新排序
+  const handleFilesReordered = async (reorderedFiles: FileInfo[]) => {
+    // Update the files with new order
+    const filesWithOrder = reorderedFiles.map((file, index) => ({
+      ...file,
+      fileOrder: index + 1
+    }));
+    setFiles(filesWithOrder);
+    
+    // Save order to localStorage as backup
+    localStorage.setItem(`task-${taskId}-file-order`, JSON.stringify(
+      filesWithOrder.map(f => ({ id: f.id, order: f.fileOrder }))
+    ));
+    
+    // Try to update file order in the backend (but don't block on errors)
+    const updates = filesWithOrder.map((file, index) => ({
+      id: file.id,
+      file_order: index + 1
+    }));
+    
+    console.log('Saving file order:', updates);
+    
+    // Fire and forget - don't wait for response
+    fetch('/api/signature/files/reorder', {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        taskId,
+        updates
+      }),
+    }).then(response => {
+      if (response.ok) {
+        console.log('File order saved to backend');
+      } else {
+        console.log('Failed to save file order to backend, but local order preserved');
+      }
+    }).catch(error => {
+      console.log('Error saving file order to backend:', error);
+    });
+  };
+
   // 保存草稿
   const handleSaveDraft = async () => {
     setSaving(true);
     try {
-      // 这里可以添加保存草稿的逻辑，比如更新任务状态等
-      console.log('保存草稿');
+      // Draft is automatically saved when files are uploaded and recipients added
+      // This is just a confirmation for the user
+      console.log('Draft saved - Files:', files.length, 'Recipients:', recipients.length);
       
-      // 显示成功消息
-      alert('Draft saved successfully');
+      // Show success message with a toast instead of alert
+      const Toast = (await import('@/lib/utils/toast')).Toast;
+      Toast.success('Draft saved successfully');
+      
+      // Wait a moment for the toast to show, then redirect to drafts page
+      setTimeout(() => {
+        router.push('/app/signature?tab=drafts');
+      }, 1000);
     } catch (error) {
       console.error('保存草稿失败:', error);
-      alert('Failed to save draft');
+      const Toast = (await import('@/lib/utils/toast')).Toast;
+      Toast.error('Failed to save draft');
     } finally {
       setSaving(false);
     }
@@ -250,6 +337,7 @@ export default function TaskConfigurationPage() {
                 files={files}
                 onFileUploaded={handleFileUploaded}
                 onFileDeleted={handleFileDeleted}
+                onFilesReordered={handleFilesReordered}
               />
             </CardContent>
           </Card>

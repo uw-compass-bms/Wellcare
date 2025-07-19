@@ -11,7 +11,7 @@ export interface SignatureTask {
   user_id: string
   title: string
   description?: string
-  status: 'draft' | 'in_progress' | 'completed' | 'cancelled'
+  status: 'draft' | 'in_progress' | 'completed' | 'cancelled' | 'trashed'
   created_at: string
   updated_at: string
   sent_at?: string

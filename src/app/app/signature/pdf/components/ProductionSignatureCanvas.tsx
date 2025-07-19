@@ -12,6 +12,7 @@ import { useFieldsApi } from '../hooks/useFieldsApi';
 import { useDebounce } from '../hooks/useDebounce';
 import { useFieldHistory } from '../hooks/useFieldHistory';
 import { Menu, Plus, Undo2, Redo2, ChevronLeft, ChevronRight, FileText } from 'lucide-react';
+import { Toast } from '@/lib/utils/toast';
 
 interface ProductionSignatureCanvasProps {
   taskId: string;
@@ -74,7 +75,7 @@ export const ProductionSignatureCanvas: React.FC<ProductionSignatureCanvasProps>
     canRedo 
   } = useFieldHistory([]);
 
-  const debouncedUpdateField = useDebounce(updateField, 500);
+  const debouncedUpdateField = useDebounce((id: string, updates: Partial<Field>, dimensions?: { width: number; height: number }) => updateField(id, updates, dimensions), 500);
   const debouncedPushState = useDebounce(pushState, 300);
 
   // Detect mobile
@@ -94,9 +95,23 @@ export const ProductionSignatureCanvas: React.FC<ProductionSignatureCanvasProps>
     let mounted = true;
     
     const loadFields = async () => {
+      console.log('Loading fields for:', { recipientId: currentRecipientId, fileId: currentFileId });
       const loadedFields = await fetchFields();
+      console.log('Loaded fields:', loadedFields);
+      
+      // Validate that all fields have proper UUIDs
+      const validFields = loadedFields.filter(field => {
+        // Check if ID looks like a UUID (36 chars with dashes)
+        const isValidId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(field.id);
+        if (!isValidId) {
+          console.warn('Skipping field with invalid ID:', field.id);
+          return false;
+        }
+        return true;
+      });
+      
       if (mounted) {
-        pushState(loadedFields);
+        pushState(validFields);
       }
     };
     
@@ -191,8 +206,8 @@ export const ProductionSignatureCanvas: React.FC<ProductionSignatureCanvasProps>
     if (isMobile) {
       const size = baseSize[type] || { width: 15, height: 5 };
       return {
-        width: size.width * 1.5,
-        height: size.height * 1.5,
+        width: Math.min(size.width * 1.2, 40), // Limit mobile width to 40%
+        height: Math.min(size.height * 1.2, 20), // Limit mobile height to 20%
       };
     }
     
@@ -246,13 +261,21 @@ export const ProductionSignatureCanvas: React.FC<ProductionSignatureCanvasProps>
         defaultValue = undefined;
     }
     
+    // Calculate initial position, ensuring field stays within bounds
+    let x = coords.x - size.width / 2;
+    let y = coords.y - size.height / 2;
+    
+    // Ensure field stays within page bounds
+    x = Math.max(0, Math.min(x, 100 - size.width));
+    y = Math.max(0, Math.min(y, 100 - size.height));
+    
     const newField: Field = {
       id: nanoid(),
       type: selectedFieldType,
       recipientId: currentRecipientId,
       pageNumber,
-      x: coords.x - size.width / 2,
-      y: coords.y - size.height / 2,
+      x,
+      y,
       width: size.width,
       height: size.height,
       required: true,
@@ -268,11 +291,24 @@ export const ProductionSignatureCanvas: React.FC<ProductionSignatureCanvasProps>
       setIsMobilePaletteOpen(false);
     }
 
-    const createdField = await createField(newField);
+    // Get page dimensions for the current page
+    const pageDims = pagesDimensions.get(pageNumber);
+    
+    const createdField = await createField(newField, pageDims);
     if (!createdField) {
+      console.error('Failed to create field in database');
       undo();
+      Toast.error('Failed to save field. Please try again.');
+    } else {
+      console.log('Field created successfully:', createdField);
+      // Update the field with the database-generated ID
+      const updatedFields = newFields.map(f => 
+        f.id === newField.id ? { ...f, id: createdField.id } : f
+      );
+      pushState(updatedFields);
+      setActiveFieldId(createdField.id);
     }
-  }, [selectedFieldType, currentRecipientId, recipients, fields, pushState, createField, undo, isMobile, getDefaultFieldSize, calculatePercentageCoords]);
+  }, [selectedFieldType, currentRecipientId, recipients, fields, pushState, createField, undo, isMobile, getDefaultFieldSize, calculatePercentageCoords, pagesDimensions]);
 
   // Handle field update
   const handleFieldUpdate = useCallback((id: string, updates: Partial<Field>) => {
@@ -280,8 +316,22 @@ export const ProductionSignatureCanvas: React.FC<ProductionSignatureCanvasProps>
       field.id === id ? { ...field, ...updates } : field
     );
     debouncedPushState(newFields);
-    debouncedUpdateField(id, updates);
-  }, [fields, debouncedPushState, debouncedUpdateField]);
+    
+    // Get current page dimensions
+    const field = fields.find(f => f.id === id);
+    const pageDims = field ? pagesDimensions.get(field.pageNumber) : undefined;
+    
+    // Ensure we have page dimensions
+    if (!pageDims) {
+      // Page dimensions might not be ready yet, but we should still update the field
+      console.warn('No page dimensions found for field:', id, 'on page:', field?.pageNumber, '- using defaults');
+      // Use default dimensions as fallback
+      const defaultDims = { width: 595, height: 842 };
+      debouncedUpdateField(id, updates, defaultDims);
+    } else {
+      debouncedUpdateField(id, updates, pageDims);
+    }
+  }, [fields, debouncedPushState, debouncedUpdateField, pagesDimensions]);
 
   // Handle field delete
   const handleFieldDelete = useCallback(async (id: string) => {
@@ -433,7 +483,7 @@ export const ProductionSignatureCanvas: React.FC<ProductionSignatureCanvasProps>
                 Files
               </h4>
               <div className="space-y-2">
-                {files.map(file => (
+                {files.map((file, index) => (
                   <button
                     key={file.id}
                     onClick={() => {
@@ -450,19 +500,9 @@ export const ProductionSignatureCanvas: React.FC<ProductionSignatureCanvasProps>
                     }`}
                   >
                     <div className="flex items-center justify-between">
-                      <span className="font-medium truncate">{file.name}</span>
-                      {file.status && (
-                        <span className={`text-xs px-2 py-0.5 rounded-full ${
-                          file.status === 'completed' 
-                            ? 'bg-green-100 text-green-700'
-                            : file.status === 'in_progress'
-                            ? 'bg-yellow-100 text-yellow-700'
-                            : 'bg-gray-100 text-gray-600'
-                        }`}>
-                          {file.status === 'completed' ? 'Completed' : 
-                           file.status === 'in_progress' ? 'In Progress' : 'Pending'}
-                        </span>
-                      )}
+                      <span className="font-medium truncate">
+                        {files.length > 1 ? `${index + 1}. ` : ''}{file.name}
+                      </span>
                     </div>
                   </button>
                 ))}

@@ -1,7 +1,7 @@
 import { SignatureTask } from '@/lib/database/queries'
 
 // 签字任务状态类型
-export type TaskStatus = 'draft' | 'in_progress' | 'completed' | 'cancelled'
+export type TaskStatus = 'draft' | 'in_progress' | 'completed' | 'cancelled' | 'trashed'
 
 // 状态转换规则定义
 export interface StatusTransitionRule {
@@ -34,23 +34,28 @@ export class TaskStatusManager {
   private static readonly TRANSITION_RULES: StatusTransitionRule[] = [
     {
       from: 'draft',
-      to: ['in_progress', 'cancelled'],
-      description: '草稿状态可以开始进行或取消'
+      to: ['in_progress', 'cancelled', 'trashed'],
+      description: '草稿状态可以开始进行、取消或移至垃圾箱'
     },
     {
       from: 'in_progress', 
-      to: ['completed', 'cancelled'],
-      description: '进行中的任务可以完成或取消'
+      to: ['completed', 'cancelled', 'trashed'],
+      description: '进行中的任务可以完成、取消或移至垃圾箱'
     },
     {
       from: 'completed',
-      to: [], // 完成的任务不能转换到其他状态
-      description: '已完成的任务不能更改状态'
+      to: ['trashed'], // 完成的任务只能移至垃圾箱
+      description: '已完成的任务只能移至垃圾箱'
     },
     {
       from: 'cancelled',
-      to: ['draft'], // 取消的任务只能重新开始为草稿
-      description: '已取消的任务只能重置为草稿状态'
+      to: ['draft', 'trashed'], // 取消的任务可以重新开始或移至垃圾箱
+      description: '已取消的任务可以重置为草稿状态或移至垃圾箱'
+    },
+    {
+      from: 'trashed',
+      to: [], // 垃圾箱中的任务不能转换（只能永久删除）
+      description: '垃圾箱中的任务不能更改状态'
     }
   ]
 
@@ -233,7 +238,8 @@ export class TaskStatusManager {
       draft: '草稿',
       in_progress: '进行中',
       completed: '已完成', 
-      cancelled: '已取消'
+      cancelled: '已取消',
+      trashed: '垃圾箱'
     }
     return descriptions[status] || status
   }

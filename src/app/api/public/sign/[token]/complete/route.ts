@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase/client';
 import { sendEmail } from '@/lib/email/resend-client';
+import { sendFinalPDFEmails } from '@/lib/email/send-final-pdf';
 
 /**
  * 完成签名API
@@ -86,6 +87,51 @@ export async function POST(
           completed_at: new Date().toISOString()
         })
         .eq('id', recipient.task_id);
+
+      // 触发PDF生成
+      try {
+        console.log('All recipients signed. Triggering PDF generation for task:', recipient.task_id);
+        
+        // 获取任务创建者的user_id
+        const { data: taskData } = await supabase
+          .from('signature_tasks')
+          .select('user_id')
+          .eq('id', recipient.task_id)
+          .single();
+
+        if (taskData?.user_id) {
+          // 调用内部API生成PDF（使用服务端调用，无需认证）
+          const generatePdfResponse = await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/signature/tasks/${recipient.task_id}/generate-final-pdf`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-user-id': taskData.user_id // 传递用户ID用于内部验证
+            }
+          });
+
+          if (generatePdfResponse.ok) {
+            const pdfResult = await generatePdfResponse.json();
+            console.log('PDF generation successful:', pdfResult);
+            
+            // 发送包含最终PDF的邮件给所有收件人
+            if (pdfResult.data?.files && pdfResult.data.files.length > 0) {
+              await sendFinalPDFEmails({
+                taskId: recipient.task_id,
+                taskTitle: recipient.signature_tasks.title,
+                files: pdfResult.data.files.map((f: any) => ({
+                  fileName: f.fileName,
+                  downloadUrl: f.downloadUrl
+                }))
+              });
+            }
+          } else {
+            console.error('PDF generation failed:', await generatePdfResponse.text());
+          }
+        }
+      } catch (pdfError) {
+        console.error('Error triggering PDF generation:', pdfError);
+        // 不要因为PDF生成失败而阻止签名完成
+      }
     }
 
     // 6. 发送确认邮件给签署人

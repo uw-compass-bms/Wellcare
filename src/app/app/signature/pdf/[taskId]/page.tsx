@@ -60,10 +60,37 @@ export default function SignatureSetupPage() {
       const recipientsData = await recipientsResponse.json();
 
       // Map files to include supabaseUrl field
-      const mappedFiles = (taskData.files || []).map((file: any) => ({
-        ...file,
-        supabaseUrl: file.original_file_url // Map original_file_url to supabaseUrl
-      }));
+      const mappedFiles = (taskData.files || [])
+        .map((file: any, index: number) => ({
+          ...file,
+          supabaseUrl: file.original_file_url, // Map original_file_url to supabaseUrl
+          originalFilename: file.original_filename, // Ensure the correct field name
+          displayName: file.display_name, // Ensure the correct field name
+          fileOrder: file.file_order || index + 1,
+          file_order: file.file_order || index + 1 // Keep both naming conventions
+        }));
+
+      // Check if we have a saved order in localStorage (from create-task page)
+      const savedOrder = localStorage.getItem(`task-${taskId}-file-order`);
+      if (savedOrder) {
+        try {
+          const orderMap = JSON.parse(savedOrder);
+          const orderDict = Object.fromEntries(orderMap.map((item: any) => [item.id, item.order]));
+          
+          // Apply saved order if it exists
+          mappedFiles.forEach((file: any) => {
+            if (orderDict[file.id]) {
+              file.fileOrder = orderDict[file.id];
+              file.file_order = orderDict[file.id];
+            }
+          });
+        } catch (e) {
+          console.log('Failed to parse saved file order');
+        }
+      }
+      
+      // Sort by file_order
+      mappedFiles.sort((a: any, b: any) => (a.fileOrder || a.file_order) - (b.fileOrder || b.file_order));
 
       setTaskData({
         ...taskData.task,
@@ -82,19 +109,28 @@ export default function SignatureSetupPage() {
   const handleSaveDraft = async () => {
     setSaving(true);
     try {
-      // Update task status to indicate signatures are configured
-      const response = await fetch(`/api/signature/tasks/${taskId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'signatures_configured' })
-      });
-
-      if (!response.ok) throw new Error('Failed to save');
-
-      Toast.success('Signature configuration saved');
+      // First, verify all fields are saved
+      const positionsResponse = await fetch(`/api/signature/positions?taskId=${taskId}`);
+      if (!positionsResponse.ok) {
+        throw new Error('Failed to verify saved fields');
+      }
+      
+      const positions = await positionsResponse.json();
+      const fieldCount = positions.data?.length || 0;
+      console.log('Saved positions:', fieldCount);
+      
+      // Save button should keep the task in draft status
+      // No status update needed - fields are already saved automatically
+      
+      Toast.success(`Configuration saved! ${fieldCount} fields configured.`);
+      
+      // Wait a moment for the toast to show, then redirect to drafts page
+      setTimeout(() => {
+        router.push('/app/signature?tab=drafts');
+      }, 1000);
     } catch (error) {
       console.error('Save error:', error);
-      Toast.error('Failed to save configuration');
+      Toast.error(error instanceof Error ? error.message : 'Failed to save configuration');
     } finally {
       setSaving(false);
     }
@@ -222,12 +258,17 @@ export default function SignatureSetupPage() {
           fileId={currentFile.id}
           recipientId={taskData.recipients[0]?.id || ''}
           recipients={taskData.recipients}
-          files={taskData.files.map(file => ({
-            id: file.id,
-            name: file.displayName || file.originalFilename,
-            url: file.supabaseUrl,
-            status: 'pending' // You can enhance this with actual status tracking
-          }))}
+          files={taskData.files
+            .sort((a, b) => (a.fileOrder || a.file_order || 0) - (b.fileOrder || b.file_order || 0))
+            .map((file, index) => {
+              console.log('Mapping file:', file); // Debug log
+              return {
+                id: file.id,
+                name: file.displayName || file.originalFilename || file.display_name || file.original_filename || 'Unnamed File',
+                url: file.supabaseUrl,
+                order: file.fileOrder || file.file_order || index + 1
+              };
+            })}
           onFileChange={(fileId, fileUrl) => {
             const fileIndex = taskData.files.findIndex(f => f.id === fileId);
             if (fileIndex !== -1) {

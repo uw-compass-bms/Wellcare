@@ -144,7 +144,7 @@ export async function PUT(
     }
 
     if (status !== undefined) {
-      const validStatuses = ['draft', 'in_progress', 'completed', 'cancelled']
+      const validStatuses = ['draft', 'in_progress', 'completed', 'cancelled', 'trashed']
       if (!validStatuses.includes(status)) {
         return NextResponse.json({
           error: 'Validation error',
@@ -172,6 +172,11 @@ export async function PUT(
         )
 
         if (!validation.valid) {
+          console.error('Status transition validation failed:', {
+            current: currentTaskResult.data.status,
+            attempted: status,
+            error: validation.error
+          })
           return NextResponse.json({
             error: 'Status transition error',
             message: validation.error,
@@ -194,9 +199,12 @@ export async function PUT(
     }
 
     // 更新任务
+    console.log('Updating task with:', { taskId, userId: authResult.userId, updates })
     const result = await updateTask(taskId, authResult.userId!, updates)
 
     if (!result.success) {
+      console.error('Task update failed:', result.error)
+      
       if (result.error?.toString().includes('PGRST116')) {
         return NextResponse.json({
           error: 'Not found',
@@ -206,7 +214,8 @@ export async function PUT(
 
       return NextResponse.json({
         error: 'Database error',
-        message: 'Failed to update task'
+        message: result.error || 'Failed to update task',
+        details: result.error
       }, { status: 500 })
     }
 

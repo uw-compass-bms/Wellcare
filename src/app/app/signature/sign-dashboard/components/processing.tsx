@@ -1,12 +1,13 @@
-import React from 'react';
-import { MoreHorizontal } from 'lucide-react';
+import React, { useState } from 'react';
+import { Edit, Trash2 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 
 interface SignatureTask {
   id: string;
   user_id: string;
   title: string;
   description?: string;
-  status: 'draft' | 'in_progress' | 'completed' | 'cancelled';
+  status: 'draft' | 'in_progress' | 'completed' | 'cancelled' | 'trashed';
   created_at: string;
   updated_at: string;
   sent_at?: string;
@@ -19,8 +20,10 @@ interface ProcessingComponentProps {
 }
 
 export default function ProcessingComponent({ tasks, onRefresh }: ProcessingComponentProps) {
-  // 筛选处理中的任务
-  const processingTasks = tasks.filter(task => task.status === 'in_progress');
+  // 筛选所有非垃圾箱的任务 (包含 draft, in_progress, completed)
+  const inboxTasks = tasks.filter(task => task.status !== 'cancelled');
+  const router = useRouter();
+  const [deletingTask, setDeletingTask] = useState<string | null>(null);
 
   // 格式化日期
   const formatDate = (dateString: string) => {
@@ -29,6 +32,47 @@ export default function ProcessingComponent({ tasks, onRefresh }: ProcessingComp
       day: 'numeric', 
       year: 'numeric' 
     });
+  };
+
+  // 移动到垃圾箱
+  const handleMoveToTrash = async (taskId: string, taskTitle: string) => {
+    if (!confirm(`Are you sure you want to move "${taskTitle}" to trash?`)) {
+      return;
+    }
+
+    setDeletingTask(taskId);
+    try {
+      const response = await fetch(`/api/signature/tasks/${taskId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          status: 'cancelled'  // Using 'cancelled' as trash temporarily
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to move to trash');
+      }
+
+      onRefresh();
+    } catch (error) {
+      console.error('Move to trash error:', error);
+      alert(error instanceof Error ? error.message : 'Failed to move to trash');
+    } finally {
+      setDeletingTask(null);
+    }
+  };
+
+  // Navigate to edit page based on task status
+  const handleEdit = (task: SignatureTask) => {
+    if (task.status === 'draft') {
+      router.push(`/app/signature/create-task/${task.id}`);
+    } else {
+      router.push(`/app/signature/pdf/${task.id}`);
+    }
   };
 
   return (
@@ -57,14 +101,14 @@ export default function ProcessingComponent({ tasks, onRefresh }: ProcessingComp
           </tr>
         </thead>
         <tbody className="bg-white divide-y divide-gray-200">
-          {processingTasks.length === 0 ? (
+          {inboxTasks.length === 0 ? (
             <tr>
               <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
-                No transactions in progress.
+                No transactions in inbox.
               </td>
             </tr>
           ) : (
-            processingTasks.map((task) => (
+            inboxTasks.map((task) => (
               <tr key={task.id} className="hover:bg-gray-50">
                 <td className="px-6 py-4 whitespace-nowrap">
                   <span className="text-blue-600 hover:text-blue-900 cursor-pointer font-medium">
@@ -82,14 +126,44 @@ export default function ProcessingComponent({ tasks, onRefresh }: ProcessingComp
                   {formatDate(task.sent_at || task.updated_at)}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
-                    In Progress
-                  </span>
+                  {task.status === 'draft' && (
+                    <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-800">
+                      Draft
+                    </span>
+                  )}
+                  {task.status === 'in_progress' && (
+                    <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
+                      In Progress
+                    </span>
+                  )}
+                  {task.status === 'completed' && (
+                    <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
+                      Completed
+                    </span>
+                  )}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  <button className="text-gray-400 hover:text-gray-600">
-                    <MoreHorizontal className="w-4 h-4" />
-                  </button>
+                  <div className="flex items-center space-x-2">
+                    <button 
+                      onClick={() => handleMoveToTrash(task.id, task.title)}
+                      disabled={deletingTask === task.id}
+                      className="text-red-400 hover:text-red-600 disabled:opacity-50 disabled:cursor-not-allowed p-1 rounded"
+                      title="Move to trash"
+                    >
+                      {deletingTask === task.id ? (
+                        <div className="w-4 h-4 border-2 border-red-400 border-t-transparent rounded-full animate-spin"></div>
+                      ) : (
+                        <Trash2 className="w-4 h-4" />
+                      )}
+                    </button>
+                    <button 
+                      onClick={() => handleEdit(task)}
+                      className="text-gray-400 hover:text-gray-600 p-1 rounded"
+                      title="Edit task"
+                    >
+                      <Edit className="w-4 h-4" />
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))

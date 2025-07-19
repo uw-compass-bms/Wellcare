@@ -1,12 +1,13 @@
-import React from 'react';
-import { MoreHorizontal } from 'lucide-react';
+import React, { useState } from 'react';
+import { Trash2, RotateCcw } from 'lucide-react';
+import { Toast } from '@/lib/utils/toast';
 
 interface SignatureTask {
   id: string;
   user_id: string;
   title: string;
   description?: string;
-  status: 'draft' | 'in_progress' | 'completed' | 'cancelled';
+  status: 'draft' | 'in_progress' | 'completed' | 'cancelled' | 'trashed';
   created_at: string;
   updated_at: string;
   sent_at?: string;
@@ -21,6 +22,7 @@ interface TrashedComponentProps {
 export default function TrashedComponent({ tasks, onRefresh }: TrashedComponentProps) {
   // 筛选已删除任务
   const trashedTasks = tasks.filter(task => task.status === 'cancelled');
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   // 格式化日期
   const formatDate = (dateString: string) => {
@@ -29,6 +31,31 @@ export default function TrashedComponent({ tasks, onRefresh }: TrashedComponentP
       day: 'numeric', 
       year: 'numeric' 
     });
+  };
+
+  // 永久删除任务
+  const handlePermanentDelete = async (taskId: string) => {
+    if (!confirm('Are you sure you want to permanently delete this task? This action cannot be undone.')) {
+      return;
+    }
+
+    setDeletingId(taskId);
+    try {
+      const response = await fetch(`/api/signature/tasks/${taskId}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to delete task');
+      }
+
+      Toast.success('Task permanently deleted');
+      onRefresh();
+    } catch (error) {
+      Toast.error('Failed to delete task');
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   return (
@@ -86,8 +113,13 @@ export default function TrashedComponent({ tasks, onRefresh }: TrashedComponentP
                   </span>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  <button className="text-gray-400 hover:text-gray-600">
-                    <MoreHorizontal className="w-4 h-4" />
+                  <button 
+                    onClick={() => handlePermanentDelete(task.id)}
+                    disabled={deletingId === task.id}
+                    className="text-red-600 hover:text-red-800 disabled:opacity-50"
+                    title="Permanently delete"
+                  >
+                    <Trash2 className="w-4 h-4" />
                   </button>
                 </td>
               </tr>

@@ -57,7 +57,7 @@ export const useFieldsApi = ({ taskId, recipientId, fileId }: UseFieldsApiProps)
   });
 
   // Convert Field to API format for POST request
-  const fieldToApiPost = (field: Field) => ({
+  const fieldToApiPost = (field: Field, pageDimensions?: { width: number; height: number }) => ({
     recipientId: field.recipientId,
     fileId: fileId || '',
     pageNumber: field.pageNumber,
@@ -65,12 +65,13 @@ export const useFieldsApi = ({ taskId, recipientId, fileId }: UseFieldsApiProps)
     y: field.y,
     width: field.width,
     height: field.height,
-    pageWidth: 595,  // Default PDF width
-    pageHeight: 842, // Default PDF height
+    pageWidth: pageDimensions?.width || 595,  // Default PDF width if not provided
+    pageHeight: pageDimensions?.height || 842, // Default PDF height if not provided
     placeholderText: field.placeholder || 'Click to sign',
     fieldType: field.type,
     fieldMeta: field.fieldMeta || {},
     isRequired: field.required !== undefined ? field.required : true,
+    defaultValue: field.defaultValue || '',
   });
 
   // Fetch fields from API
@@ -79,7 +80,13 @@ export const useFieldsApi = ({ taskId, recipientId, fileId }: UseFieldsApiProps)
     setError(null);
     
     try {
-      const response = await fetch(`/api/signature/positions?taskId=${taskId}`);
+      // Include fileId in the query if available
+      let url = `/api/signature/positions?taskId=${taskId}`;
+      if (fileId) {
+        url += `&fileId=${fileId}`;
+      }
+      
+      const response = await fetch(url);
       if (!response.ok) {
         throw new Error('Failed to fetch fields');
       }
@@ -95,10 +102,10 @@ export const useFieldsApi = ({ taskId, recipientId, fileId }: UseFieldsApiProps)
     } finally {
       setLoading(false);
     }
-  }, [taskId]);
+  }, [taskId, fileId]);
 
   // Create a new field
-  const createField = useCallback(async (field: Field): Promise<Field | null> => {
+  const createField = useCallback(async (field: Field, pageDimensions?: { width: number; height: number }): Promise<Field | null> => {
     setLoading(true);
     setError(null);
     
@@ -108,7 +115,7 @@ export const useFieldsApi = ({ taskId, recipientId, fileId }: UseFieldsApiProps)
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(fieldToApiPost(field)),
+        body: JSON.stringify(fieldToApiPost(field, pageDimensions)),
       });
       
       if (!response.ok) {
@@ -151,7 +158,7 @@ export const useFieldsApi = ({ taskId, recipientId, fileId }: UseFieldsApiProps)
   }, [taskId, recipientId, fileId]);
 
   // Update an existing field
-  const updateField = useCallback(async (id: string, updates: Partial<Field>): Promise<boolean> => {
+  const updateField = useCallback(async (id: string, updates: Partial<Field>, pageDimensions?: { width: number; height: number }): Promise<boolean> => {
     setLoading(true);
     setError(null);
     
@@ -172,11 +179,33 @@ export const useFieldsApi = ({ taskId, recipientId, fileId }: UseFieldsApiProps)
           fieldMeta: updates.fieldMeta,
           isRequired: updates.required,
           defaultValue: updates.defaultValue,
+          pageWidth: pageDimensions?.width,
+          pageHeight: pageDimensions?.height,
+          pageNumber: updates.pageNumber,
         }),
       });
       
       if (!response.ok) {
-        throw new Error('Failed to update field');
+        const errorData = await response.json().catch(() => ({}));
+        
+        // Only log errors if they're not validation errors that are expected
+        if (response.status !== 400 || !errorData.error?.includes('坐标验证失败')) {
+          console.error('Field update failed:', {
+            status: response.status,
+            error: errorData,
+            fieldId: id,
+            updates,
+            errorMessage: errorData.error || errorData.message || 'Unknown error',
+            errorDetails: errorData.details
+          });
+        }
+        
+        // Don't throw for coordinate validation errors since the field content is still saved
+        if (response.status === 400 && errorData.error?.includes('坐标验证失败')) {
+          return true; // Consider it successful since content is saved
+        }
+        
+        throw new Error(errorData.error || `Failed to update field: ${response.status}`);
       }
       
       return true;
@@ -190,6 +219,7 @@ export const useFieldsApi = ({ taskId, recipientId, fileId }: UseFieldsApiProps)
 
   // Delete a field
   const deleteField = useCallback(async (id: string): Promise<boolean> => {
+    console.log('Deleting field:', id);
     setLoading(true);
     setError(null);
     

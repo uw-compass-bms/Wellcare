@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Reorder API</title>
+</head>
+<body>
+    <h1>Test File Reorder API</h1>
+    <button onclick="testReorder()">Test Reorder</button>
+    <pre id="result"></pre>
+
+    <script>
+        async function testReorder() {
+            const result = document.getElementById('result');
+            
+            try {
+                const response = await fetch('/api/signature/files/reorder', {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        taskId: 'test-task-id',
+                        updates: [
+                            { id: 'file1', file_order: 1 },
+                            { id: 'file2', file_order: 2 }
+                        ]
+                    }),
+                });
+                
+                const data = await response.json();
+                result.textContent = JSON.stringify({
+                    status: response.status,
+                    data: data
+                }, null, 2);
+            } catch (error) {
+                result.textContent = 'Error: ' + error.message;
+            }
+        }
+    </script>
+</body>
+</html>

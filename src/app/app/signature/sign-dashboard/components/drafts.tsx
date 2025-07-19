@@ -7,7 +7,7 @@ interface SignatureTask {
   user_id: string;
   title: string;
   description?: string;
-  status: 'draft' | 'in_progress' | 'completed' | 'cancelled';
+  status: 'draft' | 'in_progress' | 'completed' | 'cancelled' | 'trashed';
   created_at: string;
   updated_at: string;
   sent_at?: string;
@@ -35,28 +35,34 @@ export default function DraftsComponent({ tasks, onRefresh }: DraftsComponentPro
     });
   };
 
-  // 删除草稿
-  const handleDeleteDraft = async (taskId: string, taskTitle: string) => {
-    if (!confirm(`Are you sure you want to delete "${taskTitle}"? This action cannot be undone.`)) {
+  // 移动到垃圾箱
+  const handleMoveToTrash = async (taskId: string, taskTitle: string) => {
+    if (!confirm(`Are you sure you want to move "${taskTitle}" to trash?`)) {
       return;
     }
 
     setDeletingTask(taskId);
     try {
       const response = await fetch(`/api/signature/tasks/${taskId}`, {
-        method: 'DELETE',
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          status: 'cancelled'  // Using 'cancelled' as trash temporarily
+        }),
       });
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.message || 'Failed to delete draft');
+        throw new Error(error.message || 'Failed to move to trash');
       }
 
       // 刷新任务列表
       onRefresh();
     } catch (error) {
-      console.error('Delete draft error:', error);
-      alert(error instanceof Error ? error.message : 'Failed to delete draft');
+      console.error('Move to trash error:', error);
+      alert(error instanceof Error ? error.message : 'Failed to move to trash');
     } finally {
       setDeletingTask(null);
     }
@@ -120,10 +126,10 @@ export default function DraftsComponent({ tasks, onRefresh }: DraftsComponentPro
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                   <div className="flex items-center space-x-2">
                     <button 
-                      onClick={() => handleDeleteDraft(task.id, task.title)}
+                      onClick={() => handleMoveToTrash(task.id, task.title)}
                       disabled={deletingTask === task.id}
                       className="text-red-400 hover:text-red-600 disabled:opacity-50 disabled:cursor-not-allowed p-1 rounded"
-                      title="Delete draft"
+                      title="Move to trash"
                     >
                       {deletingTask === task.id ? (
                         <div className="w-4 h-4 border-2 border-red-400 border-t-transparent rounded-full animate-spin"></div>

@@ -19,7 +19,7 @@ interface SignatureTask {
   user_id: string;
   title: string;
   description?: string;
-  status: 'draft' | 'in_progress' | 'completed' | 'cancelled';
+  status: 'draft' | 'in_progress' | 'completed' | 'cancelled' | 'trashed';
   created_at: string;
   updated_at: string;
   sent_at?: string;
@@ -66,7 +66,7 @@ export default function SignatureDashboard() {
 
   // 分页配置
   const tabs = [
-    { key: 'inbox' as TabType, label: 'Inbox', count: tasks.filter(t => t.status === 'in_progress').length },
+    { key: 'inbox' as TabType, label: 'Inbox', count: tasks.filter(t => t.status !== 'cancelled').length },
     { key: 'drafts' as TabType, label: 'Drafts', count: tasks.filter(t => t.status === 'draft').length },
     { key: 'completed' as TabType, label: 'Completed', count: tasks.filter(t => t.status === 'completed').length },
     { key: 'trashed' as TabType, label: 'Trashed', count: tasks.filter(t => t.status === 'cancelled').length },

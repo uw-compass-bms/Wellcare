@@ -99,7 +99,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       message: '文件上传成功',
-      data: fileRecord
+      data: {
+        ...fileRecord,
+        file_order: fileRecord.file_order || nextOrder
+      }
     })
 
   } catch (error) {
