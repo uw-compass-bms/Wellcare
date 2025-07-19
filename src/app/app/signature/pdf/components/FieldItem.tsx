@@ -58,6 +58,15 @@ interface FieldItemProps {
   pageWidth: number;
   pageHeight: number;
   isActive: boolean;
+  recipientName?: string;
+  recipientColor?: {
+    name: string;
+    border: string;
+    bg: string;
+    text: string;
+    ring: string;
+    dot: string;
+  };
   onUpdate: (id: string, updates: Partial<Field>) => void;
   onDelete: (id: string) => void;
   onActivate: (id: string) => void;
@@ -92,6 +101,8 @@ export const FieldItem: React.FC<FieldItemProps> = ({
   pageWidth,
   pageHeight,
   isActive,
+  recipientName,
+  recipientColor,
   onUpdate,
   onDelete,
   onActivate,
@@ -175,7 +186,10 @@ export const FieldItem: React.FC<FieldItemProps> = ({
   }, [handleEditComplete, field.defaultValue]);
 
   const Icon = fieldIcons[field.type];
-  const colorClass = fieldColors[field.type];
+  // Use recipient color if provided, otherwise fall back to field type colors
+  const colorClass = recipientColor 
+    ? `${recipientColor.border} ${recipientColor.bg}` 
+    : fieldColors[field.type];
 
   return (
     <Rnd
@@ -222,11 +236,18 @@ export const FieldItem: React.FC<FieldItemProps> = ({
             onMouseDown={(e) => e.stopPropagation()}
           />
         ) : (
-          <div className="flex items-center justify-center w-full h-full">
-            <Icon className="w-4 h-4 mr-1.5" />
-            <span className="text-xs font-medium">
-              {field.defaultValue || field.type}
-            </span>
+          <div className="flex flex-col items-center justify-center w-full h-full p-1">
+            <div className="flex items-center gap-1">
+              <Icon className="w-4 h-4" />
+              <span className="text-xs font-medium">
+                {field.defaultValue || field.type}
+              </span>
+            </div>
+            {recipientName && (
+              <div className={`text-[10px] font-medium mt-0.5 ${recipientColor?.text || 'text-gray-600'}`}>
+                {recipientName}
+              </div>
+            )}
           </div>
         )}
         

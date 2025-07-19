@@ -13,6 +13,7 @@ import { useDebounce } from '../hooks/useDebounce';
 import { useFieldHistory } from '../hooks/useFieldHistory';
 import { Menu, Plus, Undo2, Redo2, ChevronLeft, ChevronRight, FileText } from 'lucide-react';
 import { Toast } from '@/lib/utils/toast';
+import { getRecipientColor } from '@/lib/signature/recipient-colors';
 
 interface ProductionSignatureCanvasProps {
   taskId: string;
@@ -457,20 +458,26 @@ export const ProductionSignatureCanvas: React.FC<ProductionSignatureCanvasProps>
             <div className={`${isMobile ? '' : 'mt-6'} p-3 bg-white rounded-lg shadow-sm`}>
               <h4 className="text-sm font-semibold text-gray-700 mb-2">Recipients</h4>
               <div className="space-y-2">
-                {recipients.map(recipient => (
-                  <button
-                    key={recipient.id}
-                    onClick={() => setCurrentRecipientId(recipient.id)}
-                    className={`w-full text-left p-2 rounded-lg text-sm transition-colors ${
-                      currentRecipientId === recipient.id
-                        ? 'bg-blue-50 text-blue-700 border border-blue-300'
-                        : 'hover:bg-gray-50 border border-gray-200'
-                    }`}
-                  >
-                    <div className="font-medium">{recipient.name}</div>
-                    <div className="text-xs text-gray-500">{recipient.email}</div>
-                  </button>
-                ))}
+                {recipients.map((recipient, index) => {
+                  const color = getRecipientColor(index);
+                  return (
+                    <button
+                      key={recipient.id}
+                      onClick={() => setCurrentRecipientId(recipient.id)}
+                      className={`w-full text-left p-2 rounded-lg text-sm transition-colors flex items-center gap-2 ${
+                        currentRecipientId === recipient.id
+                          ? `${color.bg} ${color.text} border-2 ${color.border}`
+                          : 'hover:bg-gray-50 border border-gray-200'
+                      }`}
+                    >
+                      <div className={`w-3 h-3 rounded-full ${color.dot} flex-shrink-0`} />
+                      <div className="flex-1">
+                        <div className="font-medium">{recipient.name}</div>
+                        <div className="text-xs opacity-75">{recipient.email}</div>
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -629,6 +636,7 @@ export const ProductionSignatureCanvas: React.FC<ProductionSignatureCanvasProps>
                 pageDimensions={dimensions}
                 activeFieldId={activeFieldId}
                 viewportBounds={viewportBounds.get(pageNumber)}
+                recipients={recipients}
                 onFieldUpdate={handleFieldUpdate}
                 onFieldDelete={handleFieldDelete}
                 onFieldActivate={handleFieldActivate}
@@ -645,19 +653,27 @@ export const ProductionSignatureCanvas: React.FC<ProductionSignatureCanvasProps>
 
               return createPortal(
                 <div key={pageNumber} className="absolute inset-0 pointer-events-none">
-                  {pageFields.map(field => (
-                    <div key={field.id} className="pointer-events-auto">
-                      <FieldItem
-                        field={field}
-                        pageWidth={pageDimensions.width}
-                        pageHeight={pageDimensions.height}
-                        isActive={field.id === activeFieldId}
-                        onUpdate={handleFieldUpdate}
-                        onDelete={handleFieldDelete}
-                        onActivate={handleFieldActivate}
-                      />
-                    </div>
-                  ))}
+                  {pageFields.map(field => {
+                    const recipientIndex = recipients.findIndex(r => r.id === field.recipientId);
+                    const recipient = recipients.find(r => r.id === field.recipientId);
+                    const color = recipientIndex >= 0 ? getRecipientColor(recipientIndex) : undefined;
+                    
+                    return (
+                      <div key={field.id} className="pointer-events-auto">
+                        <FieldItem
+                          field={field}
+                          pageWidth={pageDimensions.width}
+                          pageHeight={pageDimensions.height}
+                          isActive={field.id === activeFieldId}
+                          recipientName={recipient?.name}
+                          recipientColor={color}
+                          onUpdate={handleFieldUpdate}
+                          onDelete={handleFieldDelete}
+                          onActivate={handleFieldActivate}
+                        />
+                      </div>
+                    );
+                  })}
                 </div>,
                 pageElement
               );

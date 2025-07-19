@@ -3,6 +3,7 @@
 import React, { useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { FieldItem, Field } from './FieldItem';
+import { getRecipientColor } from '@/lib/signature/recipient-colors';
 
 interface VirtualizedFieldLayerProps {
   fields: Field[];
@@ -10,6 +11,7 @@ interface VirtualizedFieldLayerProps {
   pageDimensions: { width: number; height: number };
   activeFieldId: string | null;
   viewportBounds?: { top: number; bottom: number; left: number; right: number };
+  recipients?: Array<{ id: string; name: string; email: string }>;
   onFieldUpdate: (id: string, updates: Partial<Field>) => void;
   onFieldDelete: (id: string) => void;
   onFieldActivate: (id: string) => void;
@@ -25,6 +27,7 @@ export const VirtualizedFieldLayer: React.FC<VirtualizedFieldLayerProps> = ({
   pageDimensions,
   activeFieldId,
   viewportBounds,
+  recipients = [],
   onFieldUpdate,
   onFieldDelete,
   onFieldActivate,
@@ -59,19 +62,27 @@ export const VirtualizedFieldLayer: React.FC<VirtualizedFieldLayerProps> = ({
   }, [pageFields, viewportBounds, pageDimensions]);
 
   // Render field with performance optimization
-  const renderField = useCallback((field: Field) => (
-    <div key={field.id} className="pointer-events-auto">
-      <FieldItem
-        field={field}
-        pageWidth={pageDimensions.width}
-        pageHeight={pageDimensions.height}
-        isActive={field.id === activeFieldId}
-        onUpdate={onFieldUpdate}
-        onDelete={onFieldDelete}
-        onActivate={onFieldActivate}
-      />
-    </div>
-  ), [pageDimensions, activeFieldId, onFieldUpdate, onFieldDelete, onFieldActivate]);
+  const renderField = useCallback((field: Field) => {
+    const recipientIndex = recipients.findIndex(r => r.id === field.recipientId);
+    const recipient = recipients.find(r => r.id === field.recipientId);
+    const color = recipientIndex >= 0 ? getRecipientColor(recipientIndex) : undefined;
+    
+    return (
+      <div key={field.id} className="pointer-events-auto">
+        <FieldItem
+          field={field}
+          pageWidth={pageDimensions.width}
+          pageHeight={pageDimensions.height}
+          isActive={field.id === activeFieldId}
+          recipientName={recipient?.name}
+          recipientColor={color}
+          onUpdate={onFieldUpdate}
+          onDelete={onFieldDelete}
+          onActivate={onFieldActivate}
+        />
+      </div>
+    );
+  }, [pageDimensions, activeFieldId, recipients, onFieldUpdate, onFieldDelete, onFieldActivate]);
 
   const pageElement = document.querySelector(`[data-page-number="${pageNumber}"]`);
   if (!pageElement) return null;
