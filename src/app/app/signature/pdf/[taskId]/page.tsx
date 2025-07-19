@@ -186,39 +186,12 @@ export default function SignatureSetupPage() {
             <div>
               <h1 className="text-lg font-semibold">{taskData.title}</h1>
               <p className="text-sm text-gray-600">
-                Setting up signatures • File {currentFileIndex + 1} of {taskData.files.length}
-                {' • '}{taskData.recipients.length} recipient{taskData.recipients.length > 1 ? 's' : ''}
+                Setting up signatures • {taskData.recipients.length} recipient{taskData.recipients.length > 1 ? 's' : ''}
               </p>
             </div>
           </div>
           
           <div className="flex items-center gap-3">
-            {/* File navigation */}
-            {taskData.files.length > 1 && (
-              <div className="flex items-center gap-2 mr-4">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setCurrentFileIndex(Math.max(0, currentFileIndex - 1))}
-                  disabled={currentFileIndex === 0}
-                >
-                  Previous File
-                </Button>
-                <span className="text-sm text-gray-600">
-                  {currentFileIndex + 1} / {taskData.files.length}
-                </span>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setCurrentFileIndex(Math.min(taskData.files.length - 1, currentFileIndex + 1))}
-                  disabled={currentFileIndex === taskData.files.length - 1}
-                >
-                  Next File
-                </Button>
-              </div>
-            )}
-
-
             <Button
               variant="outline"
               onClick={handleSaveDraft}
@@ -249,6 +222,18 @@ export default function SignatureSetupPage() {
           fileId={currentFile.id}
           recipientId={taskData.recipients[0]?.id || ''}
           recipients={taskData.recipients}
+          files={taskData.files.map(file => ({
+            id: file.id,
+            name: file.displayName || file.originalFilename,
+            url: file.supabaseUrl,
+            status: 'pending' // You can enhance this with actual status tracking
+          }))}
+          onFileChange={(fileId, fileUrl) => {
+            const fileIndex = taskData.files.findIndex(f => f.id === fileId);
+            if (fileIndex !== -1) {
+              setCurrentFileIndex(fileIndex);
+            }
+          }}
         />
       </div>
     </div>

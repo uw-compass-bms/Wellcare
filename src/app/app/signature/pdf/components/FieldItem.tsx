@@ -2,7 +2,7 @@
 
 import React, { useState, useCallback } from 'react';
 import { Rnd } from 'react-rnd';
-import { Trash2, Calendar, Type, Hash, CheckSquare, Mail, User } from 'lucide-react';
+import { Trash2, Calendar, Type, Hash, CheckSquare, Mail, User, X } from 'lucide-react';
 
 export type FieldType = 'signature' | 'date' | 'text' | 'number' | 'checkbox' | 'email' | 'name';
 
@@ -166,11 +166,18 @@ export const FieldItem: React.FC<FieldItemProps> = ({
       onDragStart={() => setIsDragging(true)}
       onDragStop={handleDragStop}
       onResizeStop={handleResizeStop}
-      onMouseDown={() => onActivate(field.id)}
+      onMouseDown={(e) => {
+        // Don't activate if clicking on delete button
+        const target = e.target as HTMLElement;
+        if (!target.closest('button')) {
+          onActivate(field.id);
+        }
+      }}
       minWidth={80}
       minHeight={30}
       className={`field-item ${isDragging ? 'dragging' : ''}`}
       style={{ zIndex: isActive ? 1000 : 100 }}
+      cancel="button"  // Prevent dragging when clicking on buttons
     >
       <div
         className={`
@@ -195,7 +202,7 @@ export const FieldItem: React.FC<FieldItemProps> = ({
             onMouseDown={(e) => e.stopPropagation()}
           />
         ) : (
-          <div className="flex items-center">
+          <div className="flex items-center justify-center w-full h-full">
             <Icon className="w-4 h-4 mr-1.5" />
             <span className="text-xs font-medium">
               {field.defaultValue || field.type}
@@ -204,15 +211,28 @@ export const FieldItem: React.FC<FieldItemProps> = ({
         )}
         
         {isActive && (
-          <button
-            onClick={(e) => {
+          <div 
+            className="absolute -top-8 left-0 right-0 z-50 flex justify-end"
+            onMouseDown={(e) => {
               e.stopPropagation();
-              onDelete(field.id);
+              e.preventDefault();
             }}
-            className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
           >
-            <Trash2 className="w-3 h-3" />
-          </button>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                console.log('Delete button clicked for field:', field.id);
+                onDelete(field.id);
+              }}
+              className="bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600 shadow-md cursor-pointer transition-all text-xs font-medium flex items-center gap-1"
+              style={{ touchAction: 'none', pointerEvents: 'all' }}
+            >
+              <Trash2 className="w-3 h-3" />
+              Delete
+            </button>
+          </div>
         )}
       </div>
     </Rnd>

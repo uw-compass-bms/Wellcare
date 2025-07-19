@@ -143,7 +143,8 @@ export default function PublicSignPage() {
         break;
       
       case 'date':
-        const today = new Date().toLocaleDateString();
+        // Use consistent date format: YYYY-MM-DD
+        const today = new Date().toLocaleDateString('en-CA');
         await updateWidgetValue(widget.id, today);
         break;
       

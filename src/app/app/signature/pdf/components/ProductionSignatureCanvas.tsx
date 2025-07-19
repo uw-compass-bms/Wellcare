@@ -7,12 +7,11 @@ import { FieldPalette, FieldType } from './FieldPalette';
 import { MobileFieldPalette } from './MobileFieldPalette';
 import { FieldItem, Field } from './FieldItem';
 import { VirtualizedFieldLayer } from './VirtualizedFieldLayer';
-import { FieldPropertiesPanel } from './FieldPropertiesPanel';
 import { nanoid } from 'nanoid';
 import { useFieldsApi } from '../hooks/useFieldsApi';
 import { useDebounce } from '../hooks/useDebounce';
 import { useFieldHistory } from '../hooks/useFieldHistory';
-import { Menu, Plus, Undo2, Redo2, Settings, ChevronLeft, ChevronRight, FileText } from 'lucide-react';
+import { Menu, Plus, Undo2, Redo2, ChevronLeft, ChevronRight, FileText } from 'lucide-react';
 
 interface ProductionSignatureCanvasProps {
   taskId: string;
@@ -24,6 +23,13 @@ interface ProductionSignatureCanvasProps {
     name: string;
     email: string;
   }>;
+  files?: Array<{
+    id: string;
+    name: string;
+    url: string;
+    status?: 'pending' | 'in_progress' | 'completed';
+  }>;
+  onFileChange?: (fileId: string, fileUrl: string) => void;
 }
 
 /**
@@ -36,17 +42,19 @@ export const ProductionSignatureCanvas: React.FC<ProductionSignatureCanvasProps>
   fileId,
   recipientId,
   recipients = [],
+  files = [],
+  onFileChange,
 }) => {
   const [selectedFieldType, setSelectedFieldType] = useState<FieldType | null>(null);
   const [activeFieldId, setActiveFieldId] = useState<string | null>(null);
   const [pagesDimensions, setPagesDimensions] = useState<Map<number, { width: number; height: number }>>(new Map());
-  const [viewportBounds, setViewportBounds] = useState<Map<number, any>>(new Map());
+  const [viewportBounds, setViewportBounds] = useState<Map<number, { top: number; bottom: number; left: number; right: number }>>(new Map());
   const [isMobile, setIsMobile] = useState(false);
   const [isMobilePaletteOpen, setIsMobilePaletteOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [isPropertiesPanelOpen, setIsPropertiesPanelOpen] = useState(false);
-  const [selectedFieldForProperties, setSelectedFieldForProperties] = useState<Field | null>(null);
   const [currentRecipientId, setCurrentRecipientId] = useState(recipientId);
+  const [currentFileId, setCurrentFileId] = useState(fileId);
+  const [currentFileUrl, setCurrentFileUrl] = useState(fileUrl);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(0);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -54,7 +62,7 @@ export const ProductionSignatureCanvas: React.FC<ProductionSignatureCanvasProps>
   const { loading, error, fetchFields, createField, updateField, deleteField } = useFieldsApi({
     taskId,
     recipientId: currentRecipientId,
-    fileId,
+    fileId: currentFileId,
   });
 
   const { 
@@ -97,7 +105,13 @@ export const ProductionSignatureCanvas: React.FC<ProductionSignatureCanvasProps>
     return () => {
       mounted = false;
     };
-  }, [taskId, currentRecipientId, fileId]); // Reload when recipient changes
+  }, [taskId, currentRecipientId, currentFileId]); // Reload when recipient or file changes
+  
+  // Reset page navigation when file changes
+  useEffect(() => {
+    setCurrentPage(1);
+    setTotalPages(0);
+  }, [currentFileUrl]);
 
   // Update page dimensions
   const updatePageDimensions = useDebounce(() => {
@@ -212,8 +226,25 @@ export const ProductionSignatureCanvas: React.FC<ProductionSignatureCanvasProps>
     const coords = calculatePercentageCoords(event, pageElement);
     const size = getDefaultFieldSize(selectedFieldType);
 
-    // Find current recipient for auto-filling name fields
+    // Find current recipient for auto-filling fields
     const currentRecipient = recipients.find(r => r.id === currentRecipientId);
+    
+    // Auto-fill default values based on field type
+    let defaultValue: string | undefined;
+    switch (selectedFieldType) {
+      case 'name':
+        defaultValue = currentRecipient?.name;
+        break;
+      case 'date':
+        // Use a consistent date format: YYYY-MM-DD
+        defaultValue = new Date().toLocaleDateString('en-CA');
+        break;
+      case 'email':
+        defaultValue = currentRecipient?.email;
+        break;
+      default:
+        defaultValue = undefined;
+    }
     
     const newField: Field = {
       id: nanoid(),
@@ -225,21 +256,13 @@ export const ProductionSignatureCanvas: React.FC<ProductionSignatureCanvasProps>
       width: size.width,
       height: size.height,
       required: true,
-      // Auto-fill name field with recipient's name
-      defaultValue: selectedFieldType === 'name' ? currentRecipient?.name : undefined,
+      defaultValue,
     };
 
     const newFields = [...fields, newField];
     pushState(newFields);
     setActiveFieldId(newField.id);
     setSelectedFieldType(null);
-    
-    // 打开属性面板
-    const fieldForProperties = newFields.find(f => f.id === newField.id);
-    if (fieldForProperties) {
-      setSelectedFieldForProperties(fieldForProperties);
-      setIsPropertiesPanelOpen(true);
-    }
     
     if (isMobile) {
       setIsMobilePaletteOpen(false);
@@ -258,26 +281,27 @@ export const ProductionSignatureCanvas: React.FC<ProductionSignatureCanvasProps>
     );
     debouncedPushState(newFields);
     debouncedUpdateField(id, updates);
-    
-    // 更新属性面板中的字段
-    if (selectedFieldForProperties?.id === id) {
-      const updatedField = newFields.find(f => f.id === id);
-      if (updatedField) {
-        setSelectedFieldForProperties(updatedField);
-      }
-    }
-  }, [fields, debouncedPushState, debouncedUpdateField, selectedFieldForProperties]);
+  }, [fields, debouncedPushState, debouncedUpdateField]);
 
   // Handle field delete
   const handleFieldDelete = useCallback(async (id: string) => {
+    console.log('Deleting field:', id);
     const newFields = fields.filter(field => field.id !== id);
     pushState(newFields);
     if (activeFieldId === id) {
       setActiveFieldId(null);
     }
 
-    const success = await deleteField(id);
-    if (!success) {
+    try {
+      const success = await deleteField(id);
+      if (!success) {
+        console.error('Failed to delete field from database');
+        undo();
+      } else {
+        console.log('Field deleted successfully');
+      }
+    } catch (error) {
+      console.error('Error deleting field:', error);
       undo();
     }
   }, [fields, activeFieldId, pushState, deleteField, undo]);
@@ -285,14 +309,7 @@ export const ProductionSignatureCanvas: React.FC<ProductionSignatureCanvasProps>
   // 处理字段激活（点击字段时）
   const handleFieldActivate = useCallback((fieldId: string) => {
     setActiveFieldId(fieldId);
-    
-    // 找到对应的字段并打开属性面板
-    const field = fields.find(f => f.id === fieldId);
-    if (field) {
-      setSelectedFieldForProperties(field);
-      setIsPropertiesPanelOpen(true);
-    }
-  }, [fields]);
+  }, []);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -382,74 +399,8 @@ export const ProductionSignatureCanvas: React.FC<ProductionSignatureCanvasProps>
                 selectedType={selectedFieldType}
                 onSelectType={setSelectedFieldType}
               />
-              
-              {/* Field properties button */}
-              {activeFieldId && (
-                <div className="mt-4">
-                  <button
-                    onClick={() => {
-                      const field = fields.find(f => f.id === activeFieldId);
-                      if (field) {
-                        setSelectedFieldForProperties(field);
-                        setIsPropertiesPanelOpen(true);
-                      }
-                    }}
-                    className="w-full flex items-center justify-center gap-2 p-3 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg transition-colors"
-                  >
-                    <Settings className="w-4 h-4" />
-                    <span className="text-sm font-medium">Field Properties</span>
-                  </button>
-                </div>
-              )}
             </>
           )}
-          
-          {/* PDF Page Navigation */}
-          <div className={`${isMobile ? '' : 'mt-6'} p-3 bg-white rounded-lg shadow-sm`}>
-            <h4 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
-              <FileText className="w-4 h-4" />
-              Page Navigation
-            </h4>
-            <div className="flex items-center justify-between mb-2">
-              <button
-                onClick={() => navigateToPage(Math.max(1, currentPage - 1))}
-                disabled={currentPage <= 1}
-                className="p-1 hover:bg-gray-100 rounded disabled:opacity-50"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-              <span className="text-sm font-medium">
-                Page {currentPage} of {totalPages || '...'}
-              </span>
-              <button
-                onClick={() => navigateToPage(Math.min(totalPages, currentPage + 1))}
-                disabled={currentPage >= totalPages}
-                className="p-1 hover:bg-gray-100 rounded disabled:opacity-50"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
-            {totalPages > 0 && (
-              <div className="grid grid-cols-5 gap-1">
-                {Array.from({ length: Math.min(totalPages, 10) }, (_, i) => i + 1).map(page => (
-                  <button
-                    key={page}
-                    onClick={() => navigateToPage(page)}
-                    className={`text-xs py-1 rounded transition-colors ${
-                      currentPage === page
-                        ? 'bg-blue-500 text-white'
-                        : 'hover:bg-gray-100'
-                    }`}
-                  >
-                    {page}
-                  </button>
-                ))}
-                {totalPages > 10 && (
-                  <span className="text-xs text-gray-500 flex items-center justify-center">...</span>
-                )}
-              </div>
-            )}
-          </div>
           
           {/* Recipient Selector */}
           {recipients.length > 0 && (
@@ -474,6 +425,51 @@ export const ProductionSignatureCanvas: React.FC<ProductionSignatureCanvasProps>
             </div>
           )}
           
+          {/* File Selector */}
+          {files.length > 0 && (
+            <div className={`${isMobile ? '' : 'mt-6'} p-3 bg-white rounded-lg shadow-sm`}>
+              <h4 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                <FileText className="w-4 h-4" />
+                Files
+              </h4>
+              <div className="space-y-2">
+                {files.map(file => (
+                  <button
+                    key={file.id}
+                    onClick={() => {
+                      setCurrentFileId(file.id);
+                      setCurrentFileUrl(file.url);
+                      if (onFileChange) {
+                        onFileChange(file.id, file.url);
+                      }
+                    }}
+                    className={`w-full text-left p-2 rounded-lg text-sm transition-colors ${
+                      currentFileId === file.id
+                        ? 'bg-blue-50 text-blue-700 border border-blue-300'
+                        : 'hover:bg-gray-50 border border-gray-200'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium truncate">{file.name}</span>
+                      {file.status && (
+                        <span className={`text-xs px-2 py-0.5 rounded-full ${
+                          file.status === 'completed' 
+                            ? 'bg-green-100 text-green-700'
+                            : file.status === 'in_progress'
+                            ? 'bg-yellow-100 text-yellow-700'
+                            : 'bg-gray-100 text-gray-600'
+                        }`}>
+                          {file.status === 'completed' ? 'Completed' : 
+                           file.status === 'in_progress' ? 'In Progress' : 'Pending'}
+                        </span>
+                      )}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          
           {/* Field stats */}
           <div className={`${isMobile ? '' : 'mt-6'} p-3 bg-white rounded-lg shadow-sm`}>
             <h4 className="text-sm font-semibold text-gray-700 mb-2">Summary</h4>
@@ -485,25 +481,6 @@ export const ProductionSignatureCanvas: React.FC<ProductionSignatureCanvasProps>
               )}
             </div>
           </div>
-          
-          {/* Properties Panel Button */}
-          {!isMobile && activeFieldId && (
-            <div className="mt-4">
-              <button
-                onClick={() => {
-                  const field = fields.find(f => f.id === activeFieldId);
-                  if (field) {
-                    setSelectedFieldForProperties(field);
-                    setIsPropertiesPanelOpen(true);
-                  }
-                }}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
-              >
-                <Settings className="w-4 h-4" />
-                Field Properties
-              </button>
-            </div>
-          )}
           
           {/* Status */}
           {loading && (
@@ -529,61 +506,124 @@ export const ProductionSignatureCanvas: React.FC<ProductionSignatureCanvasProps>
       )}
 
       {/* PDF viewing area */}
-      <div 
-        ref={scrollContainerRef}
-        className={`flex-1 overflow-auto bg-gray-100 ${isMobile ? 'pt-14' : 'p-4'}`}
-      >
-        <PDFViewer
-          fileUrl={fileUrl || '/sample.pdf'} // Fallback to sample PDF for testing
-          onPageClick={handlePDFInteraction}
-          onDocumentLoad={setTotalPages}
-          className={selectedFieldType ? 'cursor-crosshair' : ''}
-        />
-        
-        {/* Render fields with virtualization if needed */}
-        {useVirtualization ? (
-          Array.from(pagesDimensions.entries()).map(([pageNumber, dimensions]) => (
-            <VirtualizedFieldLayer
-              key={pageNumber}
-              fields={fields}
-              pageNumber={pageNumber}
-              pageDimensions={dimensions}
-              activeFieldId={activeFieldId}
-              viewportBounds={viewportBounds.get(pageNumber)}
-              onFieldUpdate={handleFieldUpdate}
-              onFieldDelete={handleFieldDelete}
-              onFieldActivate={handleFieldActivate}
-            />
-          ))
-        ) : (
-          Array.from(pagesDimensions.keys()).map(pageNumber => {
-            const pageDimensions = pagesDimensions.get(pageNumber);
-            if (!pageDimensions) return null;
-
-            const pageFields = fields.filter(field => field.pageNumber === pageNumber);
-            const pageElement = document.querySelector(`[data-page-number="${pageNumber}"]`);
-            if (!pageElement) return null;
-
-            return createPortal(
-              <div key={pageNumber} className="absolute inset-0 pointer-events-none">
-                {pageFields.map(field => (
-                  <div key={field.id} className="pointer-events-auto">
-                    <FieldItem
-                      field={field}
-                      pageWidth={pageDimensions.width}
-                      pageHeight={pageDimensions.height}
-                      isActive={field.id === activeFieldId}
-                      onUpdate={handleFieldUpdate}
-                      onDelete={handleFieldDelete}
-                      onActivate={handleFieldActivate}
-                    />
-                  </div>
+      <div className="flex-1 relative">
+        {/* Page Navigation - Fixed at top left of PDF */}
+        {!isMobile && (
+          <div className="absolute top-4 left-4 z-20 bg-white/95 backdrop-blur-sm rounded-lg shadow-lg p-2" style={{ minWidth: '150px' }}>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => navigateToPage(Math.max(1, currentPage - 1))}
+                disabled={currentPage <= 1}
+                className="p-1.5 hover:bg-gray-100 rounded disabled:opacity-50 transition-colors"
+                title="Previous page"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              
+              <div className="px-2 min-w-[80px] text-center">
+                <span className="text-xs font-medium">
+                  {currentPage} / {totalPages || '...'}
+                </span>
+              </div>
+              
+              <button
+                onClick={() => navigateToPage(Math.min(totalPages, currentPage + 1))}
+                disabled={currentPage >= totalPages}
+                className="p-1.5 hover:bg-gray-100 rounded disabled:opacity-50 transition-colors"
+                title="Next page"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+            
+            {/* Quick page jump buttons - only show for documents with many pages */}
+            {totalPages > 5 && (
+              <div className="mt-1.5 flex items-center gap-0.5 justify-center">
+                {[1, 2, 3].map(page => (
+                  <button
+                    key={page}
+                    onClick={() => navigateToPage(page)}
+                    className={`text-xs w-6 h-6 rounded transition-all ${
+                      currentPage === page
+                        ? 'bg-blue-500 text-white'
+                        : 'hover:bg-gray-100 text-gray-600'
+                    }`}
+                  >
+                    {page}
+                  </button>
                 ))}
-              </div>,
-              pageElement
-            );
-          })
+                <span className="text-gray-400 text-xs mx-1">...</span>
+                <button
+                  onClick={() => navigateToPage(totalPages)}
+                  className={`text-xs w-6 h-6 rounded transition-all ${
+                    currentPage === totalPages
+                      ? 'bg-blue-500 text-white'
+                      : 'hover:bg-gray-100 text-gray-600'
+                  }`}
+                >
+                  {totalPages}
+                </button>
+              </div>
+            )}
+          </div>
         )}
+        
+        <div 
+          ref={scrollContainerRef}
+          className={`h-full overflow-auto bg-gray-100 ${isMobile ? 'pt-14 pb-16' : 'p-4'}`}
+        >
+          <PDFViewer
+            fileUrl={currentFileUrl || '/sample.pdf'} // Fallback to sample PDF for testing
+            onPageClick={handlePDFInteraction}
+            onDocumentLoad={setTotalPages}
+            className={selectedFieldType ? 'cursor-crosshair' : ''}
+          />
+        
+          {/* Render fields with virtualization if needed */}
+          {useVirtualization ? (
+            Array.from(pagesDimensions.entries()).map(([pageNumber, dimensions]) => (
+              <VirtualizedFieldLayer
+                key={pageNumber}
+                fields={fields}
+                pageNumber={pageNumber}
+                pageDimensions={dimensions}
+                activeFieldId={activeFieldId}
+                viewportBounds={viewportBounds.get(pageNumber)}
+                onFieldUpdate={handleFieldUpdate}
+                onFieldDelete={handleFieldDelete}
+                onFieldActivate={handleFieldActivate}
+              />
+            ))
+          ) : (
+            Array.from(pagesDimensions.keys()).map(pageNumber => {
+              const pageDimensions = pagesDimensions.get(pageNumber);
+              if (!pageDimensions) return null;
+
+              const pageFields = fields.filter(field => field.pageNumber === pageNumber);
+              const pageElement = document.querySelector(`[data-page-number="${pageNumber}"]`);
+              if (!pageElement) return null;
+
+              return createPortal(
+                <div key={pageNumber} className="absolute inset-0 pointer-events-none">
+                  {pageFields.map(field => (
+                    <div key={field.id} className="pointer-events-auto">
+                      <FieldItem
+                        field={field}
+                        pageWidth={pageDimensions.width}
+                        pageHeight={pageDimensions.height}
+                        isActive={field.id === activeFieldId}
+                        onUpdate={handleFieldUpdate}
+                        onDelete={handleFieldDelete}
+                        onActivate={handleFieldActivate}
+                      />
+                    </div>
+                  ))}
+                </div>,
+                pageElement
+              );
+            })
+          )}
+        </div>
       </div>
 
       {/* Mobile field palette */}
@@ -596,16 +636,34 @@ export const ProductionSignatureCanvas: React.FC<ProductionSignatureCanvasProps>
         />
       )}
       
-      {/* Field Properties Panel */}
-      <FieldPropertiesPanel
-        field={selectedFieldForProperties}
-        isOpen={isPropertiesPanelOpen}
-        onClose={() => {
-          setIsPropertiesPanelOpen(false);
-          setSelectedFieldForProperties(null);
-        }}
-        onUpdate={handleFieldUpdate}
-      />
+      {/* Mobile bottom navigation for pages */}
+      {isMobile && (
+        <div className="fixed bottom-0 left-0 right-0 bg-white border-t z-30 px-4 py-3">
+          <div className="flex items-center justify-between gap-3">
+            <button
+              onClick={() => navigateToPage(Math.max(1, currentPage - 1))}
+              disabled={currentPage <= 1}
+              className="p-2 hover:bg-gray-100 rounded-lg disabled:opacity-50"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+            
+            <div className="flex-1 text-center">
+              <span className="text-sm font-medium">
+                Page {currentPage} of {totalPages || '...'}
+              </span>
+            </div>
+            
+            <button
+              onClick={() => navigateToPage(Math.min(totalPages, currentPage + 1))}
+              disabled={currentPage >= totalPages}
+              className="p-2 hover:bg-gray-100 rounded-lg disabled:opacity-50"
+            >
+              <ChevronRight className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
