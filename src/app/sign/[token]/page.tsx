@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { Document, Page, pdfjs } from 'react-pdf';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
-import { Loader2, Check, X } from 'lucide-react';
+import { Loader2, Check, X, Calendar, Type, Square } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 
 // 设置PDF.js worker
@@ -71,7 +71,7 @@ export default function PublicSignPage() {
       // 转换位置数据为widgets
       const widgetsData: SignatureWidget[] = result.data.positions.map((pos: any) => ({
         id: pos.id,
-        type: detectWidgetType(pos.placeholder_text),
+        type: pos.field_type || detectWidgetType(pos.placeholder_text),
         page: pos.page_number,
         x: pos.x_percent,
         y: pos.y_percent,
@@ -100,6 +100,36 @@ export default function PublicSignPage() {
     return 'text';
   };
 
+  // 生成签名样式
+  const generateSignatureStyle = (name: string) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 300;
+    canvas.height = 100;
+    const ctx = canvas.getContext('2d');
+    
+    if (ctx) {
+      ctx.fillStyle = 'white';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      ctx.fillStyle = '#000080';
+      ctx.font = 'italic 30px "Dancing Script", cursive';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(name, canvas.width / 2, canvas.height / 2);
+      
+      ctx.strokeStyle = '#000080';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(50, canvas.height * 0.7);
+      ctx.lineTo(canvas.width - 50, canvas.height * 0.7);
+      ctx.stroke();
+      
+      return canvas.toDataURL('image/png');
+    }
+    
+    return `Signed by ${name}`;
+  };
+
   // 处理签名点击
   const handleWidgetClick = async (widget: SignatureWidget) => {
     if (widget.status === 'signed') return;
@@ -107,11 +137,9 @@ export default function PublicSignPage() {
     // 根据widget类型处理
     switch (widget.type) {
       case 'signature':
-        // 这里可以打开签名面板或使用canvas签名
-        const signature = prompt('Enter your full name as signature:');
-        if (signature) {
-          await updateWidgetValue(widget.id, signature);
-        }
+        // 自动生成签名
+        const signature = generateSignatureStyle(recipient?.name || 'User');
+        await updateWidgetValue(widget.id, signature);
         break;
       
       case 'date':
@@ -120,13 +148,27 @@ export default function PublicSignPage() {
         break;
       
       case 'text':
-        const text = prompt(widget.placeholder + ':');
-        if (text) {
-          await updateWidgetValue(widget.id, text);
+      case 'name':
+      case 'email':
+      case 'number':
+        const promptText = widget.type === 'email' ? 'Enter your email:' : 
+                         widget.type === 'name' ? 'Enter your name:' :
+                         widget.type === 'number' ? 'Enter number:' :
+                         widget.placeholder + ':';
+        const value = prompt(promptText);
+        if (value) {
+          await updateWidgetValue(widget.id, value);
         }
+        break;
+        
+      case 'checkbox':
+        // Toggle checkbox value
+        const newValue = widget.value === 'checked' ? '' : 'checked';
+        await updateWidgetValue(widget.id, newValue);
         break;
     }
   };
+
 
   // 更新widget值
   const updateWidgetValue = async (widgetId: string, value: string) => {
@@ -186,6 +228,20 @@ export default function PublicSignPage() {
   const renderWidget = (widget: SignatureWidget) => {
     const isSigned = widget.status === 'signed';
     
+    // 获取对应的图标
+    const getIcon = () => {
+      switch (widget.type) {
+        case 'signature':
+          return <Type className="w-4 h-4 mr-1" />;
+        case 'date':
+          return <Calendar className="w-4 h-4 mr-1" />;
+        case 'checkbox':
+          return <Square className="w-4 h-4 mr-1" />;
+        default:
+          return null;
+      }
+    };
+    
     return (
       <div
         key={widget.id}
@@ -204,11 +260,20 @@ export default function PublicSignPage() {
         }}
         onClick={() => handleWidgetClick(widget)}
       >
-        <div className="flex items-center justify-center h-full text-xs">
+        <div className="flex items-center justify-center h-full text-xs p-2">
           {widget.value ? (
-            <span className="text-green-700 font-medium">{widget.value}</span>
+            widget.type === 'signature' && widget.value.startsWith('data:image') ? (
+              <img src={widget.value} alt="Signature" className="max-w-full max-h-full object-contain" />
+            ) : widget.type === 'checkbox' ? (
+              <Check className="w-6 h-6 text-green-700" />
+            ) : (
+              <span className="text-green-700 font-medium">{widget.value}</span>
+            )
           ) : (
-            <span className="text-blue-600">{widget.placeholder}</span>
+            <div className="flex items-center text-blue-600">
+              {getIcon()}
+              <span>{widget.placeholder}</span>
+            </div>
           )}
         </div>
         {isSigned && (
@@ -358,7 +423,8 @@ export default function PublicSignPage() {
         <div className="mt-6 bg-blue-50 rounded-lg p-4">
           <h3 className="text-sm font-semibold text-blue-900 mb-2">Instructions:</h3>
           <ul className="text-sm text-blue-700 space-y-1">
-            <li>• Click on the blue boxes to add your signature or fill in information</li>
+            <li>• Click on signature fields to automatically generate your signature</li>
+            <li>• Fill in text fields with your information</li>
             <li>• Green boxes indicate completed fields</li>
             <li>• Complete all fields before clicking "Complete Signature"</li>
           </ul>

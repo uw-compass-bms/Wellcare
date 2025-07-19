@@ -97,6 +97,8 @@ export const FieldItem: React.FC<FieldItemProps> = ({
   onActivate,
 }) => {
   const [isDragging, setIsDragging] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editValue, setEditValue] = useState(field.defaultValue || '');
   
   // 百分比转像素
   const pixelX = (field.x / 100) * pageWidth;
@@ -130,6 +132,29 @@ export const FieldItem: React.FC<FieldItemProps> = ({
     });
   }, [field.id, pageWidth, pageHeight, pixelsToPercentage, onUpdate]);
 
+  const handleDoubleClick = useCallback(() => {
+    if (field.type === 'text' || field.type === 'name' || field.type === 'email' || field.type === 'number') {
+      setIsEditing(true);
+      setEditValue(field.defaultValue || '');
+    }
+  }, [field.type, field.defaultValue]);
+
+  const handleEditComplete = useCallback(() => {
+    if (isEditing) {
+      onUpdate(field.id, { defaultValue: editValue });
+      setIsEditing(false);
+    }
+  }, [isEditing, field.id, editValue, onUpdate]);
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleEditComplete();
+    } else if (e.key === 'Escape') {
+      setIsEditing(false);
+      setEditValue(field.defaultValue || '');
+    }
+  }, [handleEditComplete, field.defaultValue]);
+
   const Icon = fieldIcons[field.type];
   const colorClass = fieldColors[field.type];
 
@@ -155,11 +180,28 @@ export const FieldItem: React.FC<FieldItemProps> = ({
           ${isActive ? 'ring-2 ring-offset-2 ring-blue-500 shadow-lg' : 'shadow-sm hover:shadow-md'}
           ${isDragging ? 'opacity-75 scale-105' : 'opacity-90 hover:opacity-100'}
         `}
+        onDoubleClick={handleDoubleClick}
       >
-        <div className="flex items-center">
-          <Icon className="w-4 h-4 mr-1.5" />
-          <span className="text-xs font-medium capitalize">{field.type}</span>
-        </div>
+        {isEditing ? (
+          <input
+            type={field.type === 'email' ? 'email' : field.type === 'number' ? 'number' : 'text'}
+            value={editValue}
+            onChange={(e) => setEditValue(e.target.value)}
+            onBlur={handleEditComplete}
+            onKeyDown={handleKeyDown}
+            className="w-full h-full px-2 text-xs bg-transparent border-none outline-none text-center"
+            autoFocus
+            onClick={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
+          />
+        ) : (
+          <div className="flex items-center">
+            <Icon className="w-4 h-4 mr-1.5" />
+            <span className="text-xs font-medium">
+              {field.defaultValue || field.type}
+            </span>
+          </div>
+        )}
         
         {isActive && (
           <button

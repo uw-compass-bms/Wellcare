@@ -12,13 +12,18 @@ import { nanoid } from 'nanoid';
 import { useFieldsApi } from '../hooks/useFieldsApi';
 import { useDebounce } from '../hooks/useDebounce';
 import { useFieldHistory } from '../hooks/useFieldHistory';
-import { Menu, Plus, Undo2, Redo2, Settings } from 'lucide-react';
+import { Menu, Plus, Undo2, Redo2, Settings, ChevronLeft, ChevronRight, FileText } from 'lucide-react';
 
 interface ProductionSignatureCanvasProps {
   taskId: string;
   fileUrl: string;
   fileId?: string;
   recipientId: string;
+  recipients?: Array<{
+    id: string;
+    name: string;
+    email: string;
+  }>;
 }
 
 /**
@@ -30,6 +35,7 @@ export const ProductionSignatureCanvas: React.FC<ProductionSignatureCanvasProps>
   fileUrl,
   fileId,
   recipientId,
+  recipients = [],
 }) => {
   const [selectedFieldType, setSelectedFieldType] = useState<FieldType | null>(null);
   const [activeFieldId, setActiveFieldId] = useState<string | null>(null);
@@ -40,11 +46,14 @@ export const ProductionSignatureCanvas: React.FC<ProductionSignatureCanvasProps>
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isPropertiesPanelOpen, setIsPropertiesPanelOpen] = useState(false);
   const [selectedFieldForProperties, setSelectedFieldForProperties] = useState<Field | null>(null);
+  const [currentRecipientId, setCurrentRecipientId] = useState(recipientId);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(0);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   
   const { loading, error, fetchFields, createField, updateField, deleteField } = useFieldsApi({
     taskId,
-    recipientId,
+    recipientId: currentRecipientId,
     fileId,
   });
 
@@ -72,7 +81,7 @@ export const ProductionSignatureCanvas: React.FC<ProductionSignatureCanvasProps>
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  // Load fields on mount - only once
+  // Load fields on mount and when recipient changes
   useEffect(() => {
     let mounted = true;
     
@@ -88,7 +97,7 @@ export const ProductionSignatureCanvas: React.FC<ProductionSignatureCanvasProps>
     return () => {
       mounted = false;
     };
-  }, [taskId, recipientId, fileId]); // Only reload when these change
+  }, [taskId, currentRecipientId, fileId]); // Reload when recipient changes
 
   // Update page dimensions
   const updatePageDimensions = useDebounce(() => {
@@ -203,16 +212,21 @@ export const ProductionSignatureCanvas: React.FC<ProductionSignatureCanvasProps>
     const coords = calculatePercentageCoords(event, pageElement);
     const size = getDefaultFieldSize(selectedFieldType);
 
+    // Find current recipient for auto-filling name fields
+    const currentRecipient = recipients.find(r => r.id === currentRecipientId);
+    
     const newField: Field = {
       id: nanoid(),
       type: selectedFieldType,
-      recipientId,
+      recipientId: currentRecipientId,
       pageNumber,
       x: coords.x - size.width / 2,
       y: coords.y - size.height / 2,
       width: size.width,
       height: size.height,
       required: true,
+      // Auto-fill name field with recipient's name
+      defaultValue: selectedFieldType === 'name' ? currentRecipient?.name : undefined,
     };
 
     const newFields = [...fields, newField];
@@ -235,7 +249,7 @@ export const ProductionSignatureCanvas: React.FC<ProductionSignatureCanvasProps>
     if (!createdField) {
       undo();
     }
-  }, [selectedFieldType, recipientId, fields, pushState, createField, undo, isMobile, getDefaultFieldSize, calculatePercentageCoords]);
+  }, [selectedFieldType, currentRecipientId, recipients, fields, pushState, createField, undo, isMobile, getDefaultFieldSize, calculatePercentageCoords]);
 
   // Handle field update
   const handleFieldUpdate = useCallback((id: string, updates: Partial<Field>) => {
@@ -305,6 +319,15 @@ export const ProductionSignatureCanvas: React.FC<ProductionSignatureCanvasProps>
 
   // Check if we should use virtualization
   const useVirtualization = fields.length > 50;
+
+  // Navigate to a specific page
+  const navigateToPage = useCallback((pageNumber: number) => {
+    const pageElement = document.querySelector(`[data-page-number="${pageNumber}"]`);
+    if (pageElement && scrollContainerRef.current) {
+      pageElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      setCurrentPage(pageNumber);
+    }
+  }, []);
 
   return (
     <div className="signature-canvas flex h-full relative">
@@ -381,6 +404,76 @@ export const ProductionSignatureCanvas: React.FC<ProductionSignatureCanvasProps>
             </>
           )}
           
+          {/* PDF Page Navigation */}
+          <div className={`${isMobile ? '' : 'mt-6'} p-3 bg-white rounded-lg shadow-sm`}>
+            <h4 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+              <FileText className="w-4 h-4" />
+              Page Navigation
+            </h4>
+            <div className="flex items-center justify-between mb-2">
+              <button
+                onClick={() => navigateToPage(Math.max(1, currentPage - 1))}
+                disabled={currentPage <= 1}
+                className="p-1 hover:bg-gray-100 rounded disabled:opacity-50"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <span className="text-sm font-medium">
+                Page {currentPage} of {totalPages || '...'}
+              </span>
+              <button
+                onClick={() => navigateToPage(Math.min(totalPages, currentPage + 1))}
+                disabled={currentPage >= totalPages}
+                className="p-1 hover:bg-gray-100 rounded disabled:opacity-50"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+            {totalPages > 0 && (
+              <div className="grid grid-cols-5 gap-1">
+                {Array.from({ length: Math.min(totalPages, 10) }, (_, i) => i + 1).map(page => (
+                  <button
+                    key={page}
+                    onClick={() => navigateToPage(page)}
+                    className={`text-xs py-1 rounded transition-colors ${
+                      currentPage === page
+                        ? 'bg-blue-500 text-white'
+                        : 'hover:bg-gray-100'
+                    }`}
+                  >
+                    {page}
+                  </button>
+                ))}
+                {totalPages > 10 && (
+                  <span className="text-xs text-gray-500 flex items-center justify-center">...</span>
+                )}
+              </div>
+            )}
+          </div>
+          
+          {/* Recipient Selector */}
+          {recipients.length > 0 && (
+            <div className={`${isMobile ? '' : 'mt-6'} p-3 bg-white rounded-lg shadow-sm`}>
+              <h4 className="text-sm font-semibold text-gray-700 mb-2">Recipients</h4>
+              <div className="space-y-2">
+                {recipients.map(recipient => (
+                  <button
+                    key={recipient.id}
+                    onClick={() => setCurrentRecipientId(recipient.id)}
+                    className={`w-full text-left p-2 rounded-lg text-sm transition-colors ${
+                      currentRecipientId === recipient.id
+                        ? 'bg-blue-50 text-blue-700 border border-blue-300'
+                        : 'hover:bg-gray-50 border border-gray-200'
+                    }`}
+                  >
+                    <div className="font-medium">{recipient.name}</div>
+                    <div className="text-xs text-gray-500">{recipient.email}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          
           {/* Field stats */}
           <div className={`${isMobile ? '' : 'mt-6'} p-3 bg-white rounded-lg shadow-sm`}>
             <h4 className="text-sm font-semibold text-gray-700 mb-2">Summary</h4>
@@ -443,6 +536,7 @@ export const ProductionSignatureCanvas: React.FC<ProductionSignatureCanvasProps>
         <PDFViewer
           fileUrl={fileUrl || '/sample.pdf'} // Fallback to sample PDF for testing
           onPageClick={handlePDFInteraction}
+          onDocumentLoad={setTotalPages}
           className={selectedFieldType ? 'cursor-crosshair' : ''}
         />
         

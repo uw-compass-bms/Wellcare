@@ -35,7 +35,7 @@ export default function SignatureSetupPage() {
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [currentFileIndex, setCurrentFileIndex] = useState(0);
-  const [currentRecipientIndex, setCurrentRecipientIndex] = useState(0);
+  // const [currentRecipientIndex, setCurrentRecipientIndex] = useState(0); // No longer needed
 
   useEffect(() => {
     if (taskId) {
@@ -162,13 +162,11 @@ export default function SignatureSetupPage() {
   }
 
   const currentFile = taskData.files[currentFileIndex];
-  const currentRecipient = taskData.recipients[currentRecipientIndex];
 
   // Debug log
   console.log('Task data:', taskData);
   console.log('Current file:', currentFile);
   console.log('File URL:', currentFile?.supabaseUrl);
-  console.log('Original file URL:', currentFile?.original_file_url);
 
   return (
     <div className="h-screen flex flex-col">
@@ -189,7 +187,7 @@ export default function SignatureSetupPage() {
               <h1 className="text-lg font-semibold">{taskData.title}</h1>
               <p className="text-sm text-gray-600">
                 Setting up signatures • File {currentFileIndex + 1} of {taskData.files.length}
-                {' • '}Recipient: {currentRecipient.name}
+                {' • '}{taskData.recipients.length} recipient{taskData.recipients.length > 1 ? 's' : ''}
               </p>
             </div>
           </div>
@@ -220,18 +218,6 @@ export default function SignatureSetupPage() {
               </div>
             )}
 
-            {/* Recipient selector */}
-            <select
-              value={currentRecipientIndex}
-              onChange={(e) => setCurrentRecipientIndex(parseInt(e.target.value))}
-              className="px-3 py-1.5 border rounded-md text-sm"
-            >
-              {taskData.recipients.map((recipient, index) => (
-                <option key={recipient.id} value={index}>
-                  {recipient.name} ({recipient.email})
-                </option>
-              ))}
-            </select>
 
             <Button
               variant="outline"
@@ -257,11 +243,12 @@ export default function SignatureSetupPage() {
       {/* Main content */}
       <div className="flex-1 overflow-hidden">
         <ProductionSignatureCanvas
-          key={`${currentFile.id}-${currentRecipient.id}`}
+          key={`${currentFile.id}-${taskData.recipients[0]?.id}`}
           taskId={taskId}
           fileUrl={currentFile.supabaseUrl}
           fileId={currentFile.id}
-          recipientId={currentRecipient.id}
+          recipientId={taskData.recipients[0]?.id || ''}
+          recipients={taskData.recipients}
         />
       </div>
     </div>

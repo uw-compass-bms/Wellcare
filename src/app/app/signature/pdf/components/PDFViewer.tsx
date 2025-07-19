@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
@@ -16,6 +16,7 @@ if (typeof window !== 'undefined') {
 interface PDFViewerProps {
   fileUrl: string;
   onPageClick?: (event: React.MouseEvent, pageNumber: number) => void;
+  onDocumentLoad?: (numPages: number) => void;
   scale?: number;
   className?: string;
   children?: React.ReactNode;
@@ -28,6 +29,7 @@ interface PDFViewerProps {
 export const PDFViewer: React.FC<PDFViewerProps> = ({
   fileUrl,
   onPageClick,
+  onDocumentLoad,
   scale = 1,
   className = '',
   children
@@ -36,11 +38,14 @@ export const PDFViewer: React.FC<PDFViewerProps> = ({
   const [pageNumber, setPageNumber] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [containerWidth, setContainerWidth] = useState<number>(0);
+  const containerRef = React.useRef<HTMLDivElement>(null);
 
   const onDocumentLoadSuccess = ({ numPages }: { numPages: number }) => {
     setNumPages(numPages);
     setLoading(false);
     setError(null);
+    onDocumentLoad?.(numPages);
   };
 
   const onDocumentLoadError = (error: Error) => {
@@ -56,6 +61,19 @@ export const PDFViewer: React.FC<PDFViewerProps> = ({
       onPageClick(event, pageNum);
     }
   };
+
+  // Update container width on resize
+  useEffect(() => {
+    const updateWidth = () => {
+      if (containerRef.current) {
+        setContainerWidth(containerRef.current.offsetWidth);
+      }
+    };
+
+    updateWidth();
+    window.addEventListener('resize', updateWidth);
+    return () => window.removeEventListener('resize', updateWidth);
+  }, []);
 
   if (!fileUrl) {
     return (
@@ -80,7 +98,7 @@ export const PDFViewer: React.FC<PDFViewerProps> = ({
   }
 
   return (
-    <div className={`pdf-viewer ${className}`}>
+    <div className={`pdf-viewer ${className}`} ref={containerRef}>
       <Document
         file={fileUrl}
         onLoadSuccess={onDocumentLoadSuccess}
@@ -94,16 +112,18 @@ export const PDFViewer: React.FC<PDFViewerProps> = ({
         {Array.from({ length: numPages }, (_, index) => (
           <div
             key={`page_${index + 1}`}
-            className="pdf-page-container relative mb-4"
+            className="pdf-page-container relative mb-4 mx-auto"
             data-page-number={index + 1}
+            style={{ width: 'fit-content' }}
           >
             <Page
               pageNumber={index + 1}
-              scale={scale}
+              width={containerWidth > 0 ? Math.min(containerWidth - 32, 800) : undefined}
+              scale={containerWidth > 0 ? undefined : scale}
               renderTextLayer={false}
               renderAnnotationLayer={false}
               onClick={(event) => handlePageClick(event, index + 1)}
-              className="pdf-page shadow-lg"
+              className="pdf-page shadow-lg mx-auto"
             />
             {/* 字段渲染层 - 通过children传入 */}
             {children}
