@@ -342,11 +342,210 @@ export function renderSignatureInviteTemplate(
   }
 }
 
+// 签字完成邮件模板变量接口
+export interface SignatureCompleteTemplateVars {
+  recipientName: string      // 收件人姓名
+  documentTitle: string      // 文档标题
+  signedAt: string          // 签字时间
+  downloadUrl?: string      // 下载链接（可选）
+}
+
+/**
+ * 签字完成邮件模板 - HTML格式
+ */
+const SIGNATURE_COMPLETE_HTML_TEMPLATE = `
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>签字完成确认 - {{documentTitle}}</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .header {
+            background: #059669;
+            color: white;
+            padding: 30px 20px;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+            font-weight: 600;
+        }
+        .content {
+            padding: 30px 20px;
+        }
+        .success-icon {
+            font-size: 48px;
+            text-align: center;
+            margin: 20px 0;
+        }
+        .info-box {
+            background: #f0fdf4;
+            border: 1px solid #86efac;
+            border-radius: 6px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .footer {
+            background: #f8fafc;
+            padding: 20px;
+            text-align: center;
+            font-size: 14px;
+            color: #6b7280;
+            border-top: 1px solid #e5e7eb;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>✅ 签字完成确认</h1>
+        </div>
+        
+        <div class="content">
+            <div class="success-icon">
+                🎉
+            </div>
+            
+            <p>尊敬的 <strong>{{recipientName}}</strong>，您好！</p>
+            
+            <p>您已成功完成了以下文档的电子签字：</p>
+            
+            <div class="info-box">
+                <h3 style="margin-top: 0;">📄 {{documentTitle}}</h3>
+                <p><strong>签字时间：</strong> {{signedAt}}</p>
+            </div>
+            
+            <p>感谢您完成电子签字！如果所有签字人都已完成签字，您将会收到包含所有签名的最终文档。</p>
+            
+            {{#if downloadUrl}}
+            <p style="margin-top: 30px;">
+                <a href="{{downloadUrl}}" style="display: inline-block; background: #4f46e5; color: white; text-decoration: none; padding: 12px 30px; border-radius: 6px; font-weight: 600;">
+                    📥 下载已签字文档
+                </a>
+            </p>
+            {{/if}}
+        </div>
+        
+        <div class="footer">
+            <p>此邮件由 UW Compass 电子签字系统自动发送</p>
+        </div>
+    </div>
+</body>
+</html>
+`
+
+/**
+ * 签字完成邮件模板 - 文本格式
+ */
+const SIGNATURE_COMPLETE_TEXT_TEMPLATE = `
+✅ 签字完成确认
+
+尊敬的 {{recipientName}}，您好！
+
+您已成功完成了以下文档的电子签字：
+
+📄 文档：{{documentTitle}}
+🕐 签字时间：{{signedAt}}
+
+感谢您完成电子签字！如果所有签字人都已完成签字，您将会收到包含所有签名的最终文档。
+
+{{#if downloadUrl}}
+📥 下载已签字文档：
+{{downloadUrl}}
+{{/if}}
+
+---
+此邮件由 UW Compass 电子签字系统自动发送
+`
+
+/**
+ * 签字完成邮件主题模板
+ */
+const SIGNATURE_COMPLETE_SUBJECT_TEMPLATE = `签字完成确认：{{documentTitle}}`
+
+/**
+ * 渲染签字完成邮件模板
+ */
+export function renderSignatureCompleteTemplate(
+  variables: SignatureCompleteTemplateVars
+): TemplateRenderResult {
+  try {
+    // 验证必需的变量
+    const requiredVars = ['recipientName', 'documentTitle', 'signedAt']
+    const missingVars = requiredVars.filter(varName => !variables[varName as keyof SignatureCompleteTemplateVars])
+    
+    if (missingVars.length > 0) {
+      return {
+        success: false,
+        error: `缺少必需的模板变量: ${missingVars.join(', ')}`
+      }
+    }
+    
+    // 准备模板变量
+    const templateVars: Record<string, string> = {
+      recipientName: variables.recipientName,
+      documentTitle: variables.documentTitle,
+      signedAt: variables.signedAt,
+      downloadUrl: variables.downloadUrl || ''
+    }
+    
+    // 简单的条件逻辑处理
+    let htmlTemplate = SIGNATURE_COMPLETE_HTML_TEMPLATE
+    let textTemplate = SIGNATURE_COMPLETE_TEXT_TEMPLATE
+    
+    // 处理 downloadUrl 条件
+    if (!variables.downloadUrl) {
+      htmlTemplate = htmlTemplate.replace(/{{#if downloadUrl}}[\s\S]*?{{\/if}}/g, '')
+      textTemplate = textTemplate.replace(/{{#if downloadUrl}}[\s\S]*?{{\/if}}/g, '')
+    } else {
+      htmlTemplate = htmlTemplate.replace(/{{#if downloadUrl}}([\s\S]*?){{\/if}}/g, '$1')
+      textTemplate = textTemplate.replace(/{{#if downloadUrl}}([\s\S]*?){{\/if}}/g, '$1')
+    }
+    
+    // 渲染最终模板
+    const template: EmailTemplate = {
+      subject: replaceTemplateVariables(SIGNATURE_COMPLETE_SUBJECT_TEMPLATE, templateVars),
+      html: replaceTemplateVariables(htmlTemplate, templateVars),
+      text: replaceTemplateVariables(textTemplate, templateVars)
+    }
+    
+    return {
+      success: true,
+      template
+    }
+    
+  } catch (error) {
+    return {
+      success: false,
+      error: `模板渲染失败: ${error instanceof Error ? error.message : String(error)}`
+    }
+  }
+}
+
 /**
  * 获取所有可用的邮件模板类型
  */
 export const EMAIL_TEMPLATE_TYPES = {
-  SIGNATURE_INVITE: 'signature_invite'
+  SIGNATURE_INVITE: 'signature_invite',
+  SIGNATURE_COMPLETE: 'signature_complete'
 } as const
 
 export type EmailTemplateType = typeof EMAIL_TEMPLATE_TYPES[keyof typeof EMAIL_TEMPLATE_TYPES]
@@ -361,6 +560,8 @@ export function renderEmailTemplate(
   switch (templateType) {
     case EMAIL_TEMPLATE_TYPES.SIGNATURE_INVITE:
       return renderSignatureInviteTemplate(variables)
+    case EMAIL_TEMPLATE_TYPES.SIGNATURE_COMPLETE:
+      return renderSignatureCompleteTemplate(variables)
     default:
       return {
         success: false,

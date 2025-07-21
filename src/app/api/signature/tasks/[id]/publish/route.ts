@@ -50,11 +50,17 @@ interface TaskPublishResult {
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const startTime = Date.now()
   
   try {
+    // 0. 解析动态路由参数
+    const resolvedParams = await params;
+    const taskId = resolvedParams.id;
+    
+    console.log('[Publish API] Task ID:', taskId);
+    
     // 1. 认证验证
     console.log('[Publish API] Starting authentication validation...')
     const authResult = await validateAuth()
@@ -68,8 +74,6 @@ export async function POST(
         message: authResult.error || 'Authentication required'
       }, { status: 401 })
     }
-
-    const taskId = params.id
 
     // 2. 验证taskId格式
     if (!taskId || typeof taskId !== 'string') {
@@ -289,11 +293,13 @@ export async function POST(
   } catch (error) {
     const duration = Date.now() - startTime
     console.error('任务发布API错误:', error)
+    console.error('错误堆栈:', error instanceof Error ? error.stack : 'No stack trace')
     
     return NextResponse.json({
       success: false,
       error: 'Internal server error',
       message: error instanceof Error ? error.message : 'Unknown error',
+      stack: process.env.NODE_ENV === 'development' ? (error instanceof Error ? error.stack : undefined) : undefined,
       duration: `${duration}ms`,
       timestamp: new Date().toISOString()
     }, { status: 500 })
@@ -382,17 +388,36 @@ async function callEmailSendAPI(
   console.log('[callEmailSendAPI] Email API URL:', emailApiUrl)
   console.log('[callEmailSendAPI] Request body:', emailRequestBody)
 
+  // 对于内部 API 调用，我们需要正确传递所有认证相关的 headers
+  const headers = new Headers()
+  headers.set('Content-Type', 'application/json')
+  
+  // 复制所有认证相关的 headers
   const authHeader = originalRequest.headers.get('authorization')
-  console.log('[callEmailSendAPI] Auth header present:', !!authHeader)
+  const cookieHeader = originalRequest.headers.get('cookie')
+  
+  if (authHeader) {
+    headers.set('Authorization', authHeader)
+  }
+  if (cookieHeader) {
+    headers.set('Cookie', cookieHeader)
+  }
+  
+  // 对于 Clerk，还需要传递这些 headers
+  const clerkHeaders = ['x-clerk-session-id', 'x-clerk-user-id', 'x-clerk-org-id']
+  clerkHeaders.forEach(header => {
+    const value = originalRequest.headers.get(header)
+    if (value) {
+      headers.set(header, value)
+    }
+  })
+  
+  console.log('[callEmailSendAPI] Headers being sent:', Array.from(headers.entries()))
 
   try {
     const response = await fetch(emailApiUrl, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        // 传递原始请求的认证头
-        'Authorization': authHeader || ''
-      },
+      headers: headers,
       body: JSON.stringify(emailRequestBody)
     })
 

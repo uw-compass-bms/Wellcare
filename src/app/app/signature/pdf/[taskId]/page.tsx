@@ -156,9 +156,16 @@ export default function SignatureSetupPage() {
       // Publish the task
       const publishResponse = await fetch(`/api/signature/tasks/${taskId}/publish`, {
         method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
       });
 
-      if (!publishResponse.ok) throw new Error('Failed to publish');
+      if (!publishResponse.ok) {
+        const errorData = await publishResponse.json().catch(() => ({ error: 'Unknown error' }));
+        console.error('Publish API error:', errorData);
+        throw new Error(errorData.error || errorData.message || 'Failed to publish');
+      }
 
       Toast.success('Task published and emails sent to recipients');
 

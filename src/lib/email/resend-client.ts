@@ -43,8 +43,8 @@ export const resend = new Proxy({} as Resend, {
 
 // 邮件发送配置
 export const EMAIL_CONFIG = {
-  from: 'UW Compass <onboarding@resend.dev>', // 使用Resend的测试域名
-  replyTo: 'onboarding@resend.dev', // 默认回复邮箱
+  from: 'UW Compass <delivered@resend.dev>', // 使用Resend的测试域名
+  replyTo: 'delivered@resend.dev', // 默认回复邮箱
   maxRetries: 3, // 最大重试次数
   retryDelay: 1000, // 重试延迟（毫秒）
 } as const
@@ -138,13 +138,21 @@ export async function sendEmail(options: EmailSendOptions): Promise<EmailSendRes
 
     // 发送邮件
     const client = getResendClient();
+    console.log('Sending email with Resend:', {
+      to: emailData.to,
+      from: emailData.from,
+      subject: emailData.subject
+    });
+    
     const result = await client.emails.send(emailData)
+    
+    console.log('Resend API response:', result);
 
     if (result.error) {
       console.error('Resend邮件发送失败:', result.error)
       return {
         success: false,
-        error: '邮件发送失败',
+        error: result.error.message || '邮件发送失败',
         details: result.error
       }
     }

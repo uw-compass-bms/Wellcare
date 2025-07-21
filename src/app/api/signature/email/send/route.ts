@@ -146,7 +146,7 @@ export async function POST(request: NextRequest) {
     // 6. 查询目标收件人
     let recipientsQuery = supabase
       .from('signature_recipients')
-      .select('id, name, email, status, token, token_expires_at')
+      .select('id, name, email, status, token, expires_at')
       .eq('task_id', taskId)
       .order('created_at', { ascending: true })
 
@@ -260,21 +260,19 @@ export async function POST(request: NextRequest) {
         const { template } = templateResult
 
         // 准备邮件发送选项
-        // 注意：在开发模式下，Resend只能发送到注册的邮箱地址
-        const isDevelopment = process.env.NODE_ENV !== 'production';
-        const actualRecipientEmail = isDevelopment && recipient.email !== 'uw.compass.bms@gmail.com' 
-          ? 'uw.compass.bms@gmail.com' // 开发模式下使用测试邮箱
-          : recipient.email;
-          
+        // 在开发环境下，使用测试邮箱
+        const isDevelopment = process.env.NODE_ENV === 'development';
+        const actualRecipientEmail = isDevelopment ? 'uw.compass.bms@gmail.com' : recipient.email;
+        
         if (isDevelopment && actualRecipientEmail !== recipient.email) {
-          console.log(`[开发模式] 邮件将发送到测试邮箱 ${actualRecipientEmail} 而不是 ${recipient.email}`);
+          console.log(`[开发模式] 邮件将发送到测试邮箱 ${actualRecipientEmail} (原收件人: ${recipient.email})`);
         }
         
         const emailOptions: EmailSendOptions = {
           to: actualRecipientEmail,
-          subject: template.subject,
-          html: template.html,
-          text: template.text
+          subject: isDevelopment ? `[TEST: ${recipient.email}] ${template.subject}` : template.subject,
+          html: isDevelopment ? `<div style="background: #fee; padding: 10px; margin-bottom: 20px;"><strong>开发模式测试邮件</strong><br>原收件人: ${recipient.email}<br>收件人姓名: ${recipient.name}</div>${template.html}` : template.html,
+          text: isDevelopment ? `[开发模式测试邮件 - 原收件人: ${recipient.email}]\n\n${template.text}` : template.text
         }
 
         // 发送邮件（使用重试机制）

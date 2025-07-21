@@ -7,10 +7,7 @@ import 'react-pdf/dist/Page/TextLayer.css';
 
 // 设置PDF.js worker
 if (typeof window !== 'undefined') {
-  pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-    'pdfjs-dist/build/pdf.worker.min.js',
-    import.meta.url,
-  ).toString();
+  pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js';
 }
 
 interface PDFViewerProps {
